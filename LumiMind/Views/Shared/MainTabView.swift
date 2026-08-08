@@ -29,9 +29,9 @@ struct MainTabView: View {
                     Label(TabItem.games.rawValue, systemImage: "gamecontroller.fill")
                 }
 
-            ComingSoonTabView(tab: .myBrain)
+           MyBrainView(gameResultViewModel: gameResultViewModel)
                 .tabItem {
-                    Label(TabItem.myBrain.rawValue, systemImage: "brain.head.profile")
+                     Label(TabItem.myBrain.rawValue, systemImage: "brain.head.profile")
                 }
 
             ComingSoonTabView(tab: .discover)

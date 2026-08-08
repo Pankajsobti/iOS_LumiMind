@@ -2,15 +2,6 @@
 //  RootView.swift
 //  LumiMind
 //
-//  Owns the app's top-level navigation state.
-//
-//  NOTE ON PLACEHOLDERS: `OnboardingQuestionnaireView` (build prompt #8),
-//  `LoginView` (build prompt #10), and `MainTabView` don't exist yet.
-//  The `*PlaceholderView`s below stand in for them so this file compiles
-//  and routes correctly today. When those screens are built, swap the
-//  matching placeholder case below for the real view — nothing else in
-//  RootView needs to change.
-//
 
 import SwiftUI
 
@@ -18,13 +9,27 @@ enum RootDestination {
     case splash
     case welcome
     case onboardingQuestionnaire
+    case socialProof
+    case signup
     case login
+    case fitTestIntro
+    case memoryMatrixFitTest
+    case resultsPlan
+    case difficultySelection
+    case streakConfirmation
     case main
 }
 
 struct RootView: View {
     @StateObject private var authViewModel = AuthViewModel()
     @State private var destination: RootDestination = .splash
+
+    // Carried across onboarding steps
+    @State private var onboardingGoals: [String] = []
+    @State private var onboardingDifficultyPlaceholder: String = "Beginner"
+    @State private var fitTestScore: Int?
+    @State private var fitTestDuration: Int?
+    @StateObject private var fitTestResultViewModel = GameResultViewModel()
 
     var body: some View {
         Group {
@@ -39,47 +44,67 @@ struct RootView: View {
                     onLogIn: { destination = .login }
                 )
             case .onboardingQuestionnaire:
-                OnboardingQuestionnairePlaceholderView()
+                QuestionnaireFlowView(
+                    onComplete: { answers in
+                        onboardingGoals = Array(answers["goals"] ?? [])
+                        // TODO: DifficultySelectionView (backlog #13) is the
+                        // real place difficultyLevel is picked. SignupView
+                        // requires a value immediately, so we seed a
+                        // placeholder here and let DifficultySelectionView
+                        // overwrite it later via submitOnboarding.
+                        destination = .socialProof
+                    },
+                    onCancel: { destination = .welcome }
+                )
+            case .socialProof:
+                SocialProofView(onContinue: { destination = .signup })
+            case .signup:
+                SignupView(
+                    authViewModel: authViewModel,
+                    goals: onboardingGoals,
+                    difficultyLevel: onboardingDifficultyPlaceholder,
+                    onSignupComplete: { destination = .fitTestIntro },
+                    onCancel: { destination = .socialProof }
+                )
             case .login:
-                LoginPlaceholderView()
+                LoginView(
+                    authViewModel: authViewModel,
+                    onLoginSuccess: { destination = .main },
+                    onCancel: { destination = .welcome }
+                )
+            case .fitTestIntro:
+                FitTestIntroView(onStart: {
+                    destination = .memoryMatrixFitTest
+                })
+            case .memoryMatrixFitTest:
+                MemoryMatrixView(
+                    gameResultViewModel: fitTestResultViewModel,
+                    isFitTest: true,
+                    onComplete: {
+                        fitTestScore = fitTestResultViewModel.results.first?.score
+                        fitTestDuration = fitTestResultViewModel.results.first?.durationSeconds
+                        destination = .resultsPlan
+                    }
+                )
+            case .resultsPlan:
+                ResultsPlanView(
+                    score: fitTestScore,
+                    durationSeconds: fitTestDuration,
+                    onContinue: { destination = .difficultySelection }
+                )
+            case .difficultySelection:
+                DifficultySelectionView(
+                    authViewModel: authViewModel,
+                    onContinue: { destination = .streakConfirmation }
+                )
+            case .streakConfirmation:
+                StreakConfirmationView(
+                    authViewModel: authViewModel,
+                    onFinishOnboarding: { destination = .main }
+                )
             case .main:
-                MainAppPlaceholderView()
+                MainTabView(authViewModel: authViewModel)
             }
-        }
-    }
-}
-
-// MARK: - Temporary placeholders (remove once the real screens exist)
-
-private struct OnboardingQuestionnairePlaceholderView: View {
-    var body: some View {
-        ZStack {
-            DesignSystem.backgroundOnboarding.ignoresSafeArea()
-            Text("Onboarding Questionnaire")
-                .font(DesignSystem.headline)
-                .foregroundColor(DesignSystem.backgroundMain)
-        }
-    }
-}
-
-private struct LoginPlaceholderView: View {
-    var body: some View {
-        ZStack {
-            DesignSystem.backgroundOnboarding.ignoresSafeArea()
-            Text("Login")
-                .font(DesignSystem.headline)
-                .foregroundColor(DesignSystem.backgroundMain)
-        }
-    }
-}
-
-private struct MainAppPlaceholderView: View {
-    var body: some View {
-        ZStack {
-            DesignSystem.backgroundMain.ignoresSafeArea()
-            Text("Main App — Today")
-                .font(DesignSystem.headline)
-                .foregroundColor(DesignSystem.backgroundOnboarding)
         }
     }
 }

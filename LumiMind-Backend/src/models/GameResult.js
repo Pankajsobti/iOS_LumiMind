@@ -32,6 +32,20 @@ export const CATEGORIES = [
   'Math',
 ];
 
+// Locked mapping from display category name -> categoryScores camelCase
+// key. Mirrors GameCategory.categoryScoresKey in GameResult.swift exactly
+// (see API_CONTRACT.md's canonical category table). This is the ONLY
+// place this mapping is defined on the backend — do not re-derive it
+// in controllers or services.
+export const CATEGORY_TO_SCORE_KEY = {
+  Speed: 'speed',
+  Memory: 'memory',
+  Attention: 'attention',
+  Flexibility: 'flexibility',
+  'Problem Solving': 'problemSolving',
+  Math: 'math',
+};
+
 const gameResultSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,

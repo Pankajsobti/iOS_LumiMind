@@ -43,6 +43,12 @@ struct GamesLibraryView: View {
                 game: game,
                 popToRoot: { path = NavigationPath() }
             )
+        } else if game.id == "speed_match" {
+            SpeedMatchDestination(
+                gameResultViewModel: gameResultViewModel,
+                game: game,
+                popToRoot: { path = NavigationPath() }
+            )
         } else {
             ComingSoonView(gameName: game.name, category: game.category)
         }
@@ -63,6 +69,34 @@ private struct MemoryMatrixDestination: View {
 
     var body: some View {
         MemoryMatrixView(
+            gameResultViewModel: gameResultViewModel,
+            isFitTest: false,
+            onComplete: { showScienceExplainer = true }
+        )
+        .navigationDestination(isPresented: $showScienceExplainer) {
+            ScienceExplainerView(
+                game: game,
+                score: gameResultViewModel.results.first?.score,
+                onContinue: popToRoot
+            )
+        }
+    }
+}
+
+// MARK: - SpeedMatchDestination
+//
+// Mirrors MemoryMatrixDestination exactly: on completion, routes
+// through ScienceExplainerView with the just-submitted score, then
+// "Continue" pops the whole stack back to the library.
+
+private struct SpeedMatchDestination: View {
+    @ObservedObject var gameResultViewModel: GameResultViewModel
+    let game: GameCatalog.Game
+    let popToRoot: () -> Void
+    @State private var showScienceExplainer = false
+
+    var body: some View {
+        SpeedMatchView(
             gameResultViewModel: gameResultViewModel,
             isFitTest: false,
             onComplete: { showScienceExplainer = true }

@@ -37,29 +37,50 @@ struct GamesLibraryView: View {
 
     @ViewBuilder
     private func destination(for game: GameCatalog.Game) -> some View {
-        if game.id == "memory_matrix" {
+        switch game.id {
+        case "memory_matrix":
             MemoryMatrixDestination(
                 gameResultViewModel: gameResultViewModel,
                 game: game,
                 popToRoot: { path = NavigationPath() }
             )
-        } else if game.id == "speed_match" {
+        case "speed_match":
             SpeedMatchDestination(
                 gameResultViewModel: gameResultViewModel,
                 game: game,
                 popToRoot: { path = NavigationPath() }
             )
-        } else {
+        case "lost_in_migration":
+            LostInMigrationDestination(
+                gameResultViewModel: gameResultViewModel,
+                game: game,
+                popToRoot: { path = NavigationPath() }
+            )
+        case "brain_shift":
+            BrainShiftDestination(
+                gameResultViewModel: gameResultViewModel,
+                game: game,
+                popToRoot: { path = NavigationPath() }
+            )
+        case "pirate_passage":
+            PiratePassageDestination(
+                gameResultViewModel: gameResultViewModel,
+                game: game,
+                popToRoot: { path = NavigationPath() }
+            )
+        case "splitting_seeds":
+            SplittingSeedsDestination(
+                gameResultViewModel: gameResultViewModel,
+                game: game,
+                popToRoot: { path = NavigationPath() }
+            )
+        default:
             ComingSoonView(gameName: game.name, category: game.category)
         }
     }
 }
 
 // MARK: - MemoryMatrixDestination
-//
-// On completion, routes through ScienceExplainerView (score pulled from
-// the just-submitted result) instead of dismissing straight back.
-// "Continue" on that screen pops the whole stack back to the library.
 
 private struct MemoryMatrixDestination: View {
     @ObservedObject var gameResultViewModel: GameResultViewModel
@@ -84,10 +105,6 @@ private struct MemoryMatrixDestination: View {
 }
 
 // MARK: - SpeedMatchDestination
-//
-// Mirrors MemoryMatrixDestination exactly: on completion, routes
-// through ScienceExplainerView with the just-submitted score, then
-// "Continue" pops the whole stack back to the library.
 
 private struct SpeedMatchDestination: View {
     @ObservedObject var gameResultViewModel: GameResultViewModel
@@ -97,6 +114,104 @@ private struct SpeedMatchDestination: View {
 
     var body: some View {
         SpeedMatchView(
+            gameResultViewModel: gameResultViewModel,
+            isFitTest: false,
+            onComplete: { showScienceExplainer = true }
+        )
+        .navigationDestination(isPresented: $showScienceExplainer) {
+            ScienceExplainerView(
+                game: game,
+                score: gameResultViewModel.results.first?.score,
+                onContinue: popToRoot
+            )
+        }
+    }
+}
+
+// MARK: - LostInMigrationDestination
+
+private struct LostInMigrationDestination: View {
+    @ObservedObject var gameResultViewModel: GameResultViewModel
+    let game: GameCatalog.Game
+    let popToRoot: () -> Void
+    @State private var showScienceExplainer = false
+
+    var body: some View {
+        LostInMigrationView(
+            gameResultViewModel: gameResultViewModel,
+            isFitTest: false,
+            onComplete: { showScienceExplainer = true }
+        )
+        .navigationDestination(isPresented: $showScienceExplainer) {
+            ScienceExplainerView(
+                game: game,
+                score: gameResultViewModel.results.first?.score,
+                onContinue: popToRoot
+            )
+        }
+    }
+}
+
+// MARK: - BrainShiftDestination
+
+private struct BrainShiftDestination: View {
+    @ObservedObject var gameResultViewModel: GameResultViewModel
+    let game: GameCatalog.Game
+    let popToRoot: () -> Void
+    @State private var showScienceExplainer = false
+
+    var body: some View {
+        BrainShiftView(
+            gameResultViewModel: gameResultViewModel,
+            isFitTest: false,
+            onComplete: { showScienceExplainer = true }
+        )
+        .navigationDestination(isPresented: $showScienceExplainer) {
+            ScienceExplainerView(
+                game: game,
+                score: gameResultViewModel.results.first?.score,
+                onContinue: popToRoot
+            )
+        }
+    }
+}
+
+// MARK: - PiratePassageDestination
+
+private struct PiratePassageDestination: View {
+    @ObservedObject var gameResultViewModel: GameResultViewModel
+    let game: GameCatalog.Game
+    let popToRoot: () -> Void
+    @State private var showScienceExplainer = false
+
+    var body: some View {
+        PiratePassageView(
+            gameResultViewModel: gameResultViewModel,
+            isFitTest: false,
+            onComplete: { showScienceExplainer = true }
+        )
+        .navigationDestination(isPresented: $showScienceExplainer) {
+            ScienceExplainerView(
+                game: game,
+                score: gameResultViewModel.results.first?.score,
+                onContinue: popToRoot
+            )
+        }
+    }
+}
+
+// MARK: - SplittingSeedsDestination
+//
+// Mirrors the other destination wrappers exactly.
+
+private struct SplittingSeedsDestination: View {
+    @ObservedObject var gameResultViewModel: GameResultViewModel
+    let game: GameCatalog.Game
+    let popToRoot: () -> Void
+    @State private var showScienceExplainer = false
+
+    var body: some View {
+        SplittingSeedsView(
             gameResultViewModel: gameResultViewModel,
             isFitTest: false,
             onComplete: { showScienceExplainer = true }

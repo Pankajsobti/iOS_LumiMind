@@ -103,7 +103,7 @@ final class APIClient {
     static let shared = APIClient()
 
     /// Locked base URL — see API_CONTRACT.md.
-    private let baseURL = URL(string: "http://localhost:5000/api/v1")!
+    private let baseURL = URL(string: "http://localhost:5001/api/v1")!
 
     private let session: URLSession
     private let encoder: JSONEncoder

@@ -21,14 +21,14 @@ final class AuthViewModel: ObservableObject {
     private let apiClient: APIClient
     private let keychain: KeychainManager
 
-    init(apiClient: APIClient = .shared, keychain: KeychainManager = .shared) {
-        self.apiClient = apiClient
-        self.keychain = keychain
-        // A stored token means a previous session exists; callers should
-        // still call `fetchCurrentUser()` on launch to hydrate `currentUser`
-        // (and to discover a stale/expired token, which flips this back off).
-        self.isAuthenticated = keychain.getToken() != nil
-    }
+   init(apiClient: APIClient? = nil, keychain: KeychainManager? = nil) {
+    self.apiClient = apiClient ?? .shared
+    self.keychain = keychain ?? .shared
+    // A stored token means a previous session exists; callers should
+    // still call `fetchCurrentUser()` on launch to hydrate `currentUser`
+    // (and to discover a stale/expired token, which flips this back off).
+    self.isAuthenticated = (self.keychain).getToken() != nil
+}
 
     // MARK: - Signup / Login
 

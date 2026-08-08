@@ -98,12 +98,11 @@ struct BrainShiftView: View {
         viewModel.currentItem.color == .red ? Color(hex: "#F857A6") : Color(hex: "#4A7BFF")
     }
 
-    @ViewBuilder
-    private var itemShape: some Shape {
+    private var itemShape: AnyShape {
         if viewModel.currentItem.shape == .circle {
-            Circle()
+            AnyShape(Circle())
         } else {
-            RoundedRectangle(cornerRadius: 12)
+            AnyShape(RoundedRectangle(cornerRadius: 12))
         }
     }
 

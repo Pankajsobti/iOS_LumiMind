@@ -56,7 +56,7 @@ struct RootView: View {
                     onCancel: { destination = .welcome }
                 )
             case .socialProof:
-                SocialProofView(onContinue: { destination = .signup })
+                SocialProofView(variant: .afterGoals, onContinue: { destination = .signup })
             case .signup:
                 SignupView(
                     authViewModel: authViewModel,

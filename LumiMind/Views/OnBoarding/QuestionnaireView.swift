@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - QuestionnaireView
 //
@@ -25,7 +26,31 @@ struct QuestionnaireView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.lg) {
             header
+            optionsContent
+        }
+    }
+
+    @ViewBuilder
+    private var optionsContent: some View {
+        switch question.optionStyle {
+        case .pill:
             optionsGrid
+        case .card:
+            optionsList
+        }
+    }
+
+    private var optionsList: some View {
+        VStack(spacing: DesignSystem.Spacing.sm) {
+            ForEach(question.options) { option in
+                OptionCard(
+                    label: option.label,
+                    description: option.description ?? "",
+                    isSelected: selectedOptionIDs.contains(option.id)
+                ) {
+                    toggle(option)
+                }
+            }
         }
     }
 
@@ -105,21 +130,29 @@ private struct OptionPill: View {
 
     var body: some View {
         Button(action: action) {
-            Text(label)
-                .font(DesignSystem.roundedFont(size: 15, weight: .semibold))
-                .foregroundColor(isSelected ? DesignSystem.backgroundMain : DesignSystem.backgroundOnboarding)
-                .padding(.horizontal, DesignSystem.Spacing.md)
-                .padding(.vertical, DesignSystem.Spacing.sm)
-                .frame(maxWidth: .infinity)
-                .background(background)
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule()
-                        .strokeBorder(
-                            isSelected ? Color.clear : DesignSystem.backgroundMain.opacity(0.15),
-                            lineWidth: 1
-                        )
-                )
+            HStack(spacing: DesignSystem.Spacing.xs) {
+                Text(label)
+                    .font(DesignSystem.roundedFont(size: 15, weight: .semibold))
+                    .foregroundColor(isSelected ? DesignSystem.backgroundMain : DesignSystem.backgroundOnboarding)
+
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(DesignSystem.roundedFont(size: 13, weight: .semibold))
+                        .foregroundColor(DesignSystem.backgroundMain)
+                }
+            }
+            .padding(.horizontal, DesignSystem.Spacing.md)
+            .padding(.vertical, DesignSystem.Spacing.sm)
+            .frame(maxWidth: .infinity)
+            .background(background)
+            .clipShape(Capsule())
+            .overlay(
+                Capsule()
+                    .strokeBorder(
+                        isSelected ? DesignSystem.backgroundMain.opacity(0.3) : DesignSystem.backgroundMain.opacity(0.15),
+                        lineWidth: 1
+                    )
+            )
         }
         .buttonStyle(.plain)
         .animation(.easeOut(duration: 0.15), value: isSelected)
@@ -135,6 +168,79 @@ private struct OptionPill: View {
         }
     }
 }
+
+
+private struct OptionCard: View {
+    let label: String
+    let description: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    @State private var isPressed = false
+
+    var body: some View {
+        Button {
+            let generator = UIImpactFeedbackGenerator(style: .light)
+            generator.impactOccurred()
+            action()
+        } label: {
+            HStack(alignment: .top, spacing: DesignSystem.Spacing.sm) {
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxs) {
+                    Text(label)
+                        .font(DesignSystem.headline)
+                        .foregroundColor(isSelected ? DesignSystem.backgroundMain : DesignSystem.backgroundOnboarding)
+
+                    Text(description)
+                        .font(DesignSystem.subheadline)
+                        .foregroundColor(
+                            isSelected
+                                ? DesignSystem.backgroundMain.opacity(0.8)
+                                : DesignSystem.backgroundOnboarding.opacity(0.6)
+                        )
+                }
+
+                Spacer()
+
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(DesignSystem.roundedFont(size: 15, weight: .semibold))
+                        .foregroundColor(DesignSystem.backgroundMain)
+                }
+            }
+            .padding(DesignSystem.Spacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(background)
+            .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact))
+            .overlay(
+                RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact)
+                    .strokeBorder(
+                        isSelected ? DesignSystem.backgroundMain.opacity(0.3) : DesignSystem.backgroundMain.opacity(0.15),
+                        lineWidth: 1
+                    )
+            )
+            .scaleEffect(isPressed ? 0.97 : 1.0)
+        }
+        .buttonStyle(.plain)
+        .animation(.easeOut(duration: 0.15), value: isSelected)
+        .animation(.easeOut(duration: 0.1), value: isPressed)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+
+    @ViewBuilder
+    private var background: some View {
+        if isSelected {
+            DesignSystem.primaryGradient
+        } else {
+            DesignSystem.backgroundMain
+        }
+    }
+}
+
 
 // MARK: - Preview
 

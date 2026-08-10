@@ -3,28 +3,43 @@ import SwiftUI
 // MARK: - QuestionnaireFlowView
 //
 // Sequences a list of `OnboardingQuestion`s through `QuestionnaireView`,
-// one at a time, with Back/Continue navigation and a step indicator.
+// interleaved with `SocialProofView` interstitials at fixed points, one
+// step at a time, with Back/Continue navigation and a step indicator
+// (dots reflect question steps only — interstitials aren't counted).
 // Collects answers into local state ([question.id: Set<optionID>]) and
 // hands the finished dictionary back via `onComplete` when the user
-// finishes the last question.
+// finishes the last step.
 //
 // Deliberately stateless regarding networking: no `APIClient` or
 // `AuthViewModel` calls happen here. Submitting the collected answers
-// (e.g. via `AuthViewModel.submitOnboarding(goals:difficultyLevel:)`) is
-// the responsibility of whatever screen owns `onComplete` — out of scope
-// for this component per the build prompt.
+// is the responsibility of whatever screen owns `onComplete`.
 //
 // Background/text pairing matches WelcomeView (dark navy background,
 // cream text) so the transition from "Get Started" feels continuous.
 
 struct QuestionnaireFlowView: View {
-    let questions: [OnboardingQuestion]
 
-    /// Called once the user completes the final question, with the full
+    /// A single step in the flow — either a question or a no-input
+    /// interstitial (`SocialProofView`).
+    private enum FlowStep: Identifiable {
+        case question(OnboardingQuestion)
+        case interstitial(SocialProofView.Variant)
+
+        var id: String {
+            switch self {
+            case .question(let q): return "question_\(q.id)"
+            case .interstitial(let v): return "interstitial_\(v)"
+            }
+        }
+    }
+
+    @State private var steps: [FlowStep]
+
+    /// Called once the user completes the final step, with the full
     /// set of answers keyed by `OnboardingQuestion.id`.
     let onComplete: ([String: Set<String>]) -> Void
 
-    /// Optional: called if the user backs out of the very first question.
+    /// Optional: called if the user backs out of the very first step.
     var onCancel: (() -> Void)? = nil
 
     @State private var currentIndex: Int = 0
@@ -35,28 +50,40 @@ struct QuestionnaireFlowView: View {
         onComplete: @escaping ([String: Set<String>]) -> Void,
         onCancel: (() -> Void)? = nil
     ) {
-        self.questions = questions
+        var initialSteps = questions.map { FlowStep.question($0) }
+        if let goalsIndex = questions.firstIndex(where: { $0.id == "goals" }) {
+            initialSteps.insert(.interstitial(.afterGoals), at: goalsIndex + 1)
+        }
+        _steps = State(initialValue: initialSteps)
         self.onComplete = onComplete
         self.onCancel = onCancel
     }
 
-    private var currentQuestion: OnboardingQuestion {
-        questions[currentIndex]
+    private var currentStep: FlowStep {
+        steps[currentIndex]
     }
 
-    private var isLastQuestion: Bool {
-        currentIndex == questions.count - 1
+    private var isLastStep: Bool {
+        currentIndex == steps.count - 1
     }
 
-    private var currentSelectionBinding: Binding<Set<String>> {
+    /// Indices of question-type steps only, for the progress dots.
+    private var questionStepIndices: [Int] {
+        steps.indices.filter {
+            if case .question = steps[$0] { return true }
+            return false
+        }
+    }
+
+    private func selectionBinding(for question: OnboardingQuestion) -> Binding<Set<String>> {
         Binding(
-            get: { answers[currentQuestion.id] ?? [] },
-            set: { answers[currentQuestion.id] = $0 }
+            get: { answers[question.id] ?? [] },
+            set: { answers[question.id] = $0 }
         )
     }
 
-    private var canContinue: Bool {
-        !(answers[currentQuestion.id] ?? []).isEmpty
+    private func canContinue(for question: OnboardingQuestion) -> Bool {
+        !(answers[question.id] ?? []).isEmpty
     }
 
     var body: some View {
@@ -64,24 +91,31 @@ struct QuestionnaireFlowView: View {
             DesignSystem.backgroundOnboarding
                 .ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                progressDots
-                    .padding(.top, DesignSystem.Spacing.lg)
-                    .padding(.bottom, DesignSystem.Spacing.xl)
+            switch currentStep {
+            case .question(let question):
+                VStack(spacing: 0) {
+                    progressDots
+                        .padding(.top, DesignSystem.Spacing.lg)
+                        .padding(.bottom, DesignSystem.Spacing.xl)
 
-                QuestionnaireView(
-                    question: currentQuestion,
-                    selectedOptionIDs: currentSelectionBinding
-                )
-                .id(currentQuestion.id) // forces a clean transition between questions
-                .transition(.opacity.combined(with: .move(edge: .trailing)))
+                    QuestionnaireView(
+                        question: question,
+                        selectedOptionIDs: selectionBinding(for: question)
+                    )
+                    .id(question.id) // forces a clean transition between questions
+                    .transition(.opacity.combined(with: .move(edge: .trailing)))
 
-                Spacer()
+                    Spacer()
 
-                footerButtons
-                    .padding(.bottom, DesignSystem.Spacing.sm)
+                    footerButtons(for: question)
+                        .padding(.bottom, DesignSystem.Spacing.sm)
+                }
+                .padding(.horizontal, DesignSystem.Spacing.lg)
+
+            case .interstitial(let variant):
+                SocialProofView(variant: variant, onContinue: goNext)
+                    .transition(.opacity.combined(with: .move(edge: .trailing)))
             }
-            .padding(.horizontal, DesignSystem.Spacing.lg)
         }
         .animation(.easeInOut(duration: 0.25), value: currentIndex)
     }
@@ -90,7 +124,7 @@ struct QuestionnaireFlowView: View {
 
     private var progressDots: some View {
         HStack(spacing: DesignSystem.Spacing.xs) {
-            ForEach(questions.indices, id: \.self) { index in
+            ForEach(questionStepIndices, id: \.self) { index in
                 Capsule()
                     .fill(
                         index == currentIndex
@@ -102,12 +136,12 @@ struct QuestionnaireFlowView: View {
         }
     }
 
-    // MARK: Footer navigation
+    // MARK: Footer navigation (question steps only)
 
-    private var footerButtons: some View {
+    private func footerButtons(for question: OnboardingQuestion) -> some View {
         VStack(spacing: DesignSystem.Spacing.md) {
             Button(action: goNext) {
-                Text(isLastQuestion ? "Finish" : "Continue")
+                Text(isLastStep ? "Finish" : "Continue")
                     .font(DesignSystem.buttonLabel)
                     .foregroundColor(DesignSystem.backgroundMain)
                     .frame(maxWidth: .infinity)
@@ -116,8 +150,8 @@ struct QuestionnaireFlowView: View {
             .buttonStyle(.plain)
             .background(DesignSystem.primaryGradient)
             .clipShape(Capsule())
-            .disabled(!canContinue)
-            .opacity(canContinue ? 1 : 0.5)
+            .disabled(!canContinue(for: question))
+            .opacity(canContinue(for: question) ? 1 : 0.5)
 
             Button(action: goBack) {
                 Text(currentIndex == 0 ? "Cancel" : "Back")
@@ -132,12 +166,42 @@ struct QuestionnaireFlowView: View {
     // MARK: Navigation logic
 
     private func goNext() {
-        guard canContinue else { return }
+        if case .question(let question) = currentStep {
+            guard canContinue(for: question) else { return }
+            if question.id == "goals" {
+                expandForSelectedGoals()
+            }
+        }
 
-        if isLastQuestion {
+        if isLastStep {
             onComplete(answers)
         } else {
             currentIndex += 1
+        }
+    }
+
+    /// Inserts one skill-focus question per category implied by the
+    /// user's goal selections, right after the "afterGoals" interstitial,
+    /// followed by the "afterCategories" interstitial. Removes any
+    /// previously-inserted skill questions and that interstitial first,
+    /// so going back and changing goals doesn't leave stale screens.
+    private func expandForSelectedGoals() {
+        let selectedGoalIDs = answers["goals"] ?? []
+        let categories = SkillCategory.categories(forSelectedGoalIDs: selectedGoalIDs)
+        let skillSteps = categories.map { FlowStep.question(OnboardingQuestion.skillFocusQuestion(for: $0)) }
+
+        steps.removeAll {
+            if case .question(let q) = $0, q.id.hasPrefix("skillFocus_") { return true }
+            if case .interstitial(.afterCategories) = $0 { return true }
+            return false
+        }
+
+        if let afterGoalsIndex = steps.firstIndex(where: {
+            if case .interstitial(.afterGoals) = $0 { return true }
+            return false
+        }) {
+            steps.insert(contentsOf: skillSteps, at: afterGoalsIndex + 1)
+            steps.insert(.interstitial(.afterCategories), at: afterGoalsIndex + 1 + skillSteps.count)
         }
     }
 

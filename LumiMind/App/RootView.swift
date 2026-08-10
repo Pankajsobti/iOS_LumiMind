@@ -40,8 +40,7 @@ struct RootView: View {
                 }
             case .welcome:
                 WelcomeView(
-                    onGetStarted: { destination = .onboardingQuestionnaire },
-                    onLogIn: { destination = .login }
+                    onGetStarted: { destination = .onboardingQuestionnaire }
                 )
             case .onboardingQuestionnaire:
                 QuestionnaireFlowView(
@@ -106,6 +105,7 @@ struct RootView: View {
                 MainTabView(authViewModel: authViewModel)
             }
         }
+        .animation(.easeInOut(duration: 0.35), value: destination)
         .onChange(of: authViewModel.isAuthenticated) { isAuthenticated in
             if !isAuthenticated && destination == .main {
                 destination = .welcome

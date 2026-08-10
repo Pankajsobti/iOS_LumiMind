@@ -1,31 +1,32 @@
 import SwiftUI
-
-// MARK: - SocialProofView
-//
-// Static, persuasive screen shown between the onboarding questionnaire
-// and signup (RootDestination.login). Purely presentational: no
-// networking, no user input, no selections — just a headline, a few
-// stat callouts, and a single CTA that advances the flow.
-//
-// Navigation follows the same closure-based pattern as WelcomeView /
-// QuestionnaireFlowView (no NavigationStack, no new mechanism) — the
-// caller (RootView, once wired up) owns the actual destination change.
-//
-// All copy/numbers below are PLACEHOLDER content to be swapped for real
-// claims later — clearly marked, not shipped as final marketing copy.
+import UIKit
 
 struct SocialProofView: View {
-    /// Advances to the next onboarding step (Login/Signup — backlog #10).
+    enum Variant {
+        case afterGoals
+        case afterCategories
+
+        var headline: String {
+            switch self {
+            case .afterGoals: return "You're not starting from zero"
+            case .afterCategories: return "Small sessions, real change"
+            }
+        }
+
+        var body: String {
+            switch self {
+            case .afterGoals:
+                return "Everyone's cognitive profile is different. We'll map yours before building your plan."
+            case .afterCategories:
+                return "A few focused minutes a day is enough to see your thinking sharpen over time."
+            }
+        }
+    }
+
+    let variant: Variant
     var onContinue: () -> Void
 
-    // MARK: Placeholder content — swap before ship
-
-    private let headline = "Join thousands building a sharper mind"
-    private let stats: [StatCallout] = [
-        StatCallout(value: "50K+", label: "Learners onboard (placeholder)"),
-        StatCallout(value: "20%", label: "Avg. improvement in 30 days (placeholder)"),
-        StatCallout(value: "4.8★", label: "Average app rating (placeholder)")
-    ]
+    @State private var hasAppeared = false
 
     var body: some View {
         ZStack {
@@ -35,20 +36,33 @@ struct SocialProofView: View {
             VStack(spacing: 0) {
                 Spacer()
 
-                VStack(spacing: DesignSystem.Spacing.lg) {
-                    Text(headline)
+                InterstitialMark(variant: variant)
+                    .frame(width: 100, height: 100)
+                    .padding(.bottom, DesignSystem.Spacing.xl)
+                    .opacity(hasAppeared ? 1 : 0)
+                    .scaleEffect(hasAppeared ? 1 : 0.9)
+
+                VStack(spacing: DesignSystem.Spacing.md) {
+                    Text(variant.headline)
                         .font(DesignSystem.title)
                         .foregroundColor(DesignSystem.backgroundMain)
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal, DesignSystem.Spacing.lg)
 
-                    statCallouts
+                    Text(variant.body)
+                        .font(DesignSystem.body)
+                        .foregroundColor(DesignSystem.backgroundMain.opacity(0.7))
+                        .multilineTextAlignment(.center)
                 }
+                .padding(.horizontal, DesignSystem.Spacing.lg)
 
                 Spacer()
                 Spacer()
 
-                Button(action: onContinue) {
+                Button(action: {
+                    let generator = UIImpactFeedbackGenerator(style: .light)
+                    generator.impactOccurred()
+                    onContinue()
+                }) {
                     Text("Continue")
                         .font(DesignSystem.buttonLabel)
                         .foregroundColor(DesignSystem.backgroundMain)
@@ -62,47 +76,68 @@ struct SocialProofView: View {
                 .padding(.bottom, DesignSystem.Spacing.lg)
             }
         }
-    }
-
-    // MARK: Stat callouts
-
-    private var statCallouts: some View {
-        VStack(spacing: DesignSystem.Spacing.md) {
-            ForEach(stats) { stat in
-                HStack(spacing: DesignSystem.Spacing.md) {
-                    Text(stat.value)
-                        .font(DesignSystem.roundedFont(size: 22, weight: .bold))
-                        .foregroundColor(DesignSystem.backgroundMain)
-                        .frame(minWidth: 64, alignment: .leading)
-
-                    Text(stat.label)
-                        .font(DesignSystem.subheadline)
-                        .foregroundColor(DesignSystem.backgroundMain.opacity(0.7))
-
-                    Spacer()
-                }
-                .padding(.horizontal, DesignSystem.Spacing.md)
-                .padding(.vertical, DesignSystem.Spacing.sm)
-                .background(DesignSystem.backgroundMain.opacity(0.06))
-                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact))
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.4)) {
+                hasAppeared = true
             }
         }
-        .padding(.horizontal, DesignSystem.Spacing.lg)
     }
 }
 
-// MARK: - StatCallout
+private struct InterstitialMark: View {
+    let variant: SocialProofView.Variant
 
-private struct StatCallout: Identifiable {
-    let id = UUID()
-    let value: String
-    let label: String
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let h = geo.size.height
+            let points = nodePoints(w: w, h: h)
+
+            ZStack {
+                Path { path in
+                    for i in 0..<points.count {
+                        for j in (i + 1)..<points.count {
+                            path.move(to: points[i])
+                            path.addLine(to: points[j])
+                        }
+                    }
+                }
+                .stroke(
+                    DesignSystem.backgroundMain.opacity(0.55),
+                    style: StrokeStyle(lineWidth: w * 0.06, lineCap: .round)
+                )
+
+                ForEach(points.indices, id: \.self) { i in
+                    Circle()
+                        .fill(DesignSystem.backgroundMain.opacity(1.0 - Double(i) * 0.12))
+                        .frame(width: w * (0.20 - CGFloat(i) * 0.015))
+                        .position(points[i])
+                }
+            }
+        }
+    }
+
+    private func nodePoints(w: CGFloat, h: CGFloat) -> [CGPoint] {
+        switch variant {
+        case .afterGoals:
+            return [
+                CGPoint(x: w * 0.5, y: h * 0.28),
+                CGPoint(x: w * 0.30, y: h * 0.56),
+                CGPoint(x: w * 0.70, y: h * 0.56)
+            ]
+        case .afterCategories:
+            return [
+                CGPoint(x: w * 0.30, y: h * 0.35),
+                CGPoint(x: w * 0.70, y: h * 0.35),
+                CGPoint(x: w * 0.30, y: h * 0.65),
+                CGPoint(x: w * 0.70, y: h * 0.65)
+            ]
+        }
+    }
 }
 
-// MARK: - Preview
-
 #Preview {
-    SocialProofView(onContinue: {
-        print("Continue tapped — advance to Login/Signup")
+    SocialProofView(variant: .afterGoals, onContinue: {
+        print("Continue tapped")
     })
 }

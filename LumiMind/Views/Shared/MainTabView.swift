@@ -29,7 +29,7 @@ struct MainTabView: View {
                     Label(TabItem.games.rawValue, systemImage: "gamecontroller.fill")
                 }
 
-           MyBrainView(gameResultViewModel: gameResultViewModel)
+            MyBrainView(gameResultViewModel: gameResultViewModel, authViewModel: authViewModel)
                 .tabItem {
                      Label(TabItem.myBrain.rawValue, systemImage: "brain.head.profile")
                 }

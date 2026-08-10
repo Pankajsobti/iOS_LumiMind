@@ -10,10 +10,13 @@ import SwiftUI
 
 struct MyBrainView: View {
     @ObservedObject var gameResultViewModel: GameResultViewModel
+    @ObservedObject var authViewModel: AuthViewModel
     @StateObject private var viewModel: MyBrainViewModel
+    @State private var showLogoutConfirmation = false
 
-    init(gameResultViewModel: GameResultViewModel) {
+    init(gameResultViewModel: GameResultViewModel, authViewModel: AuthViewModel) {
         self.gameResultViewModel = gameResultViewModel
+        self.authViewModel = authViewModel
         _viewModel = StateObject(wrappedValue: MyBrainViewModel(gameResultViewModel: gameResultViewModel))
     }
 
@@ -59,6 +62,8 @@ struct MyBrainView: View {
                 categoryBreakdownSection
 
                 historySection
+
+                logoutSection
 
                 Spacer(minLength: DesignSystem.Spacing.xl)
             }
@@ -231,6 +236,35 @@ struct MyBrainView: View {
         // Flagged out of scope per Build Prompt #20.
     }
 
+    // MARK: Logout
+
+    private var logoutSection: some View {
+        Button {
+            showLogoutConfirmation = true
+        } label: {
+            Text("Log Out")
+                .font(DesignSystem.headline)
+                .foregroundColor(.red)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, DesignSystem.Spacing.sm + DesignSystem.Spacing.xxs)
+                .background(Color.white.opacity(0.6))
+                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact))
+        }
+        .alert("Log Out?", isPresented: $showLogoutConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Log Out", role: .destructive) {
+                authViewModel.logout()
+            }
+        } message: {
+            Text("You'll need to log back in to continue your training.")
+        }
+    }
+
+    // MARK: Formatters
+
+
+
+
     // MARK: Formatters
 
     private static let dateFormatter: DateFormatter = {
@@ -250,5 +284,5 @@ struct MyBrainView: View {
 // MARK: - Preview
 
 #Preview {
-    MyBrainView(gameResultViewModel: GameResultViewModel())
+    MyBrainView(gameResultViewModel: GameResultViewModel(), authViewModel: AuthViewModel())
 }

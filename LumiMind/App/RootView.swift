@@ -106,6 +106,11 @@ struct RootView: View {
                 MainTabView(authViewModel: authViewModel)
             }
         }
+        .onChange(of: authViewModel.isAuthenticated) { isAuthenticated in
+            if !isAuthenticated && destination == .main {
+                destination = .welcome
+            }
+        }
     }
 }
 

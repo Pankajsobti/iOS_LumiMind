@@ -1,12 +1,17 @@
-import SwiftUI
-
-// MARK: - SplittingSeedsView
 //
-// Presentational only — renders whatever SplittingSeedsViewModel
-// reports and forwards taps into `answer(_:)`. Same structure as the
-// other five games: header uses the category gradient, finished
-// overlay shows score with a Continue button that calls onComplete
-// (caller routes to ScienceExplainerView).
+//  SplittingSeedsView.swift
+//  LumiMind
+//
+//  Presentational only — renders the seed pile + rotating stick and
+//  forwards the drag angle into the ViewModel's `updateStickAngle(to:)`,
+//  and the lock-in tap into `lockIn()`. Header/HUD follows the same
+//  pattern as the other five games (category gradient card), reskinned
+//  from Lumosity's forest scene onto LumiMind's cream background using
+//  the Math category's emerald/mint gradient throughout instead of a
+//  themed illustration.
+//
+
+import SwiftUI
 
 struct SplittingSeedsView: View {
     @StateObject private var viewModel: SplittingSeedsViewModel
@@ -21,19 +26,11 @@ struct SplittingSeedsView: View {
         ZStack {
             DesignSystem.backgroundMain.ignoresSafeArea()
 
-            VStack(spacing: DesignSystem.Spacing.lg) {
+            VStack(spacing: DesignSystem.Spacing.md) {
                 header
-
-                Spacer()
-
-                problemCard
-
-                feedbackLabel
-                    .frame(height: 22)
-
-                Spacer()
-
-                answerButtons
+                playField
+                    .padding(.horizontal, DesignSystem.Spacing.md)
+                lockInButton
             }
             .padding(.vertical, DesignSystem.Spacing.lg)
 
@@ -47,20 +44,26 @@ struct SplittingSeedsView: View {
         }
     }
 
-    // MARK: Header
+    // MARK: Header (TIME / SCORE / LEVEL + pips)
 
     private var header: some View {
-        VStack(spacing: DesignSystem.Spacing.sm) {
-            HStack {
-                Text("Splitting Seeds")
-                    .font(DesignSystem.title2)
-                    .foregroundColor(.white)
-                Spacer()
-                Text("\(min(viewModel.currentRoundIndex + 1, SplittingSeedsViewModel.totalRounds))/\(SplittingSeedsViewModel.totalRounds)")
-                    .font(DesignSystem.roundedFont(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
+        HStack {
+            hudItem(label: "TIME", value: formattedTime)
+            Spacer()
+            hudItem(label: "SCORE", value: "\(viewModel.score)")
+            Spacer()
+            VStack(alignment: .trailing, spacing: DesignSystem.Spacing.xxs) {
+                Text("LEVEL \(viewModel.level)")
+                    .font(DesignSystem.roundedFont(size: 13, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.85))
+                HStack(spacing: 5) {
+                    ForEach(0..<SplittingSeedsViewModel.roundsPerLevel, id: \.self) { index in
+                        Circle()
+                            .fill(index < viewModel.roundInLevel ? .white : .white.opacity(0.35))
+                            .frame(width: 7, height: 7)
+                    }
+                }
             }
-            ProgressBar(fraction: viewModel.timeRemainingFraction)
         }
         .padding(DesignSystem.Spacing.md)
         .background(DesignSystem.mathGradient)
@@ -68,69 +71,135 @@ struct SplittingSeedsView: View {
         .padding(.horizontal, DesignSystem.Spacing.md)
     }
 
-    // MARK: Problem card
-
-    private var problemCard: some View {
-        VStack(spacing: DesignSystem.Spacing.md) {
-            HStack(spacing: DesignSystem.Spacing.xs) {
-                Image(systemName: "leaf.fill")
-                    .foregroundColor(.white)
-                Text("\(viewModel.totalSeeds) seeds")
-                    .font(DesignSystem.title2)
-                    .foregroundColor(.white)
-            }
-
-            Text("Split evenly into 2 groups of \(viewModel.claimedPerGroup)?")
+    private func hudItem(label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxs) {
+            Text(label)
+                .font(DesignSystem.roundedFont(size: 13, weight: .semibold))
+                .foregroundColor(.white.opacity(0.85))
+            Text(value)
                 .font(DesignSystem.headline)
                 .foregroundColor(.white)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, DesignSystem.Spacing.md)
         }
-        .frame(maxWidth: .infinity)
-        .padding(DesignSystem.Spacing.lg)
-        .background(DesignSystem.mathGradient)
+    }
+
+    private var formattedTime: String {
+        let minutes = viewModel.timeRemaining / 60
+        let seconds = viewModel.timeRemaining % 60
+        return String(format: "%d:%02d", minutes, seconds)
+    }
+
+    // MARK: Play field
+
+    private var playField: some View {
+        GeometryReader { geo in
+            let center = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
+            let playRadius = min(geo.size.width, geo.size.height) / 2 - DesignSystem.Spacing.md
+            let stickLength = playRadius * 2.3
+
+            ZStack {
+                RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius)
+                    .fill(DesignSystem.mathGradient.opacity(0.12))
+
+                // Stick
+                Capsule()
+                    .fill(DesignSystem.mathGradient)
+                    .frame(width: stickLength, height: 10)
+                    .rotationEffect(.radians(viewModel.stickAngle))
+                    .scaleEffect(viewModel.lastAnswerWasCorrect != nil ? 1.04 : 1.0)
+                    .animation(.spring(response: 0.25, dampingFraction: 0.5), value: viewModel.lastAnswerWasCorrect)
+                    .position(center)
+
+                // Pivot marker
+                Circle()
+                    .fill(.white)
+                    .frame(width: 14, height: 14)
+                    .overlay(Circle().stroke(DesignSystem.backgroundOnboarding.opacity(0.3), lineWidth: 2))
+                    .position(center)
+
+                // Seeds
+                ForEach(viewModel.seeds) { seed in
+                    Image(systemName: "drop.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(DesignSystem.backgroundOnboarding.opacity(0.85))
+                        .rotationEffect(.radians(seed.angle + .pi / 2))
+                        .position(seedPosition(seed, center: center, playRadius: playRadius))
+                }
+
+                // Count bubbles
+                countBubble(count: viewModel.leftCount, isLeft: true, center: center, playRadius: playRadius)
+                countBubble(count: viewModel.rightCount, isLeft: false, center: center, playRadius: playRadius)
+
+                if let correct = viewModel.lastAnswerWasCorrect {
+                    Text(correct ? "Correct!" : "Not quite")
+                        .font(DesignSystem.headline)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, DesignSystem.Spacing.md)
+                        .padding(.vertical, DesignSystem.Spacing.xs)
+                        .background(correct ? Color(hex: "#2ECC71") : Color(hex: "#FF6B4A"))
+                        .clipShape(Capsule())
+                        .position(x: center.x, y: DesignSystem.Spacing.lg)
+                }
+            }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        let dx = value.location.x - center.x
+                        let dy = value.location.y - center.y
+                        guard dx != 0 || dy != 0 else { return }
+                        viewModel.updateStickAngle(to: atan2(dy, dx))
+                    }
+            )
+            .disabled(viewModel.phase != .playing)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius))
-        .padding(.horizontal, DesignSystem.Spacing.md)
     }
 
-    @ViewBuilder
-    private var feedbackLabel: some View {
-        if let correct = viewModel.lastAnswerWasCorrect {
-            Text(correct ? "Correct!" : "Not quite")
-                .font(DesignSystem.headline)
-                .foregroundColor(correct ? Color(hex: "#2ECC71") : Color(hex: "#FF6B4A"))
-        } else {
-            Text(" ")
-                .font(DesignSystem.headline)
-        }
+    private func seedPosition(_ seed: SplittingSeedsViewModel.Seed, center: CGPoint, playRadius: CGFloat) -> CGPoint {
+        let r = playRadius * seed.radiusFraction
+        return CGPoint(
+            x: center.x + r * cos(seed.angle),
+            y: center.y + r * sin(seed.angle)
+        )
     }
 
-    // MARK: Answer buttons
+    /// Bubble sits at a fixed offset perpendicular-ish to the stick on its
+    /// respective side, rotating with the stick so it stays visually paired
+    /// with the seeds on that side.
+    private func countBubble(count: Int, isLeft: Bool, center: CGPoint, playRadius: CGFloat) -> some View {
+        let perpendicular = viewModel.stickAngle + (isLeft ? .pi / 2 : -.pi / 2)
+        let r = playRadius * 0.55
+        let position = CGPoint(
+            x: center.x + r * cos(perpendicular),
+            y: center.y + r * sin(perpendicular)
+        )
+        return Text("\(count)")
+            .font(DesignSystem.roundedFont(size: 17, weight: .bold))
+            .foregroundColor(.white)
+            .frame(width: 34, height: 34)
+            .background(DesignSystem.mathGradient)
+            .clipShape(Circle())
+            .overlay(Circle().stroke(.white, lineWidth: 2))
+            .position(position)
+            .animation(.easeOut(duration: 0.12), value: count)
+    }
 
-    private var answerButtons: some View {
-        HStack(spacing: DesignSystem.Spacing.md) {
-            Button { viewModel.answer(.falseAnswer) } label: {
-                Text("False")
-                    .font(DesignSystem.buttonLabel)
-                    .foregroundColor(DesignSystem.backgroundOnboarding)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, DesignSystem.Spacing.md)
-            }
-            .buttonStyle(.plain)
-            .background(.white)
-            .clipShape(Capsule())
+    // MARK: Lock-in button
 
-            Button { viewModel.answer(.trueAnswer) } label: {
-                Text("True")
-                    .font(DesignSystem.buttonLabel)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, DesignSystem.Spacing.md)
-            }
-            .buttonStyle(.plain)
-            .background(DesignSystem.primaryGradient)
-            .clipShape(Capsule())
+    private var lockInButton: some View {
+        Button {
+            viewModel.lockIn()
+        } label: {
+            Text("Lock In Split")
+                .font(DesignSystem.buttonLabel)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, DesignSystem.Spacing.md)
         }
+        .buttonStyle(.plain)
+        .background(DesignSystem.primaryGradient)
+        .clipShape(Capsule())
         .padding(.horizontal, DesignSystem.Spacing.md)
         .disabled(viewModel.phase != .playing)
     }
@@ -189,23 +258,6 @@ struct SplittingSeedsView: View {
             .background(DesignSystem.backgroundOnboarding)
             .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius))
         }
-    }
-}
-
-// MARK: - ProgressBar
-
-private struct ProgressBar: View {
-    let fraction: Double
-
-    var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule().fill(.white.opacity(0.3))
-                Capsule().fill(.white)
-                    .frame(width: geo.size.width * max(0, min(1, fraction)))
-            }
-        }
-        .frame(height: 6)
     }
 }
 

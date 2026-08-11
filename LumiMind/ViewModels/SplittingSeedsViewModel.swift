@@ -1,22 +1,22 @@
+//
+//  SplittingSeedsViewModel.swift
+//  LumiMind
+//
+//  Owns gameplay state for Splitting Seeds: seeds sit at fixed random
+//  positions each round, the user rotates a stick (View forwards drag
+//  angle into `updateStickAngle(to:)`), live per-side counts are
+//  recomputed on every angle change, and `lockIn()` checks for an even
+//  split. Seed count is always even, so an exact 50/50 angle always
+//  exists — no round is unsolvable. Wrong locks cost time instead of a
+//  life (GameResult has no lives field); correct locks add score and
+//  advance a 4-round pip indicator, leveling up every 4 correct rounds.
+
 import Foundation
 import Combine
-
-// MARK: - SplittingSeedsViewModel
-//
-// Owns gameplay state for Splitting Seeds: each round shows a pile of
-// seeds already split into two groups alongside a proposed "seeds per
-// group" claim, and the user judges True/False on whether the pile
-// splits evenly into that claim. Total seed counts are always
-// generated as even numbers, so an exact even split always exists —
-// no round is ever unsolvable. Mirrors SpeedMatchViewModel's timing
-// pattern given this game's explicit Math/Speed hybrid nature — View
-// only renders published state and forwards taps into `answer(_:)`;
-// this ViewModel submits the result itself the moment the game ends.
+import UIKit
 
 @MainActor
 final class SplittingSeedsViewModel: ObservableObject {
-
-    // MARK: Game phase
 
     enum Phase: Equatable {
         case playing
@@ -24,34 +24,34 @@ final class SplittingSeedsViewModel: ObservableObject {
         case finished(score: Int)
     }
 
-    enum Answer {
-        case trueAnswer
-        case falseAnswer
-    }
-
-    private struct Round {
-        let totalSeeds: Int
-        let claimedPerGroup: Int
-        /// Whether `claimedPerGroup * 2 == totalSeeds`.
-        let isCorrectClaim: Bool
+    struct Seed: Identifiable, Equatable {
+        let id: Int
+        /// Fixed angle from the pivot, in radians.
+        let angle: Double
+        /// Fixed distance from the pivot, as a fraction (0.28...1.0) of the play radius.
+        let radiusFraction: Double
     }
 
     // MARK: Tunables
 
-    static let totalRounds = 15
-    static let baseResponseWindowSeconds: Double = 4.0
-    static let minResponseWindowSeconds: Double = 1.75
+    static let roundsPerLevel = 4
+    static let totalGameSeconds = 90
+    static let baseSeedCount = 8
+    static let maxSeedCount = 16
+    static let wrongAnswerTimePenalty = 5
 
     // MARK: Published state
 
     @Published private(set) var phase: Phase = .playing
-    @Published private(set) var currentRoundIndex: Int = 0
-    @Published private(set) var totalSeeds: Int = 0
-    @Published private(set) var claimedPerGroup: Int = 0
-    /// 1.0 = window just opened, 0.0 = window closed.
-    @Published private(set) var timeRemainingFraction: Double = 1.0
-    @Published private(set) var correctCount: Int = 0
-    @Published private(set) var wrongCount: Int = 0
+    @Published private(set) var seeds: [Seed] = []
+    /// Radians. The View's DragGesture drives this live via `updateStickAngle(to:)`.
+    @Published private(set) var stickAngle: Double = 0.35
+    @Published private(set) var leftCount: Int = 0
+    @Published private(set) var rightCount: Int = 0
+    @Published private(set) var timeRemaining: Int = SplittingSeedsViewModel.totalGameSeconds
+    @Published private(set) var score: Int = 0
+    @Published private(set) var level: Int = 1
+    @Published private(set) var roundInLevel: Int = 0 // drives the pip indicator, 0..<roundsPerLevel
     @Published private(set) var lastAnswerWasCorrect: Bool?
 
     var isBusySubmitting: Bool { gameResultViewModel.isLoading }
@@ -61,13 +61,9 @@ final class SplittingSeedsViewModel: ObservableObject {
 
     private let gameResultViewModel: GameResultViewModel
     private let isFitTest: Bool
-    private var rounds: [Round] = []
-    private var roundStartedAt: Date?
+    private var timerCancellable: AnyCancellable?
     private var gameStartedAt: Date?
-    private var roundTask: Task<Void, Never>?
-    private var hasAnsweredCurrentRound = false
-    private var runningScore: Int = 0
-    private var currentResponseWindow: Double = SplittingSeedsViewModel.baseResponseWindowSeconds
+    private var isLockingIn = false
 
     init(gameResultViewModel: GameResultViewModel, isFitTest: Bool = false) {
         self.gameResultViewModel = gameResultViewModel
@@ -78,128 +74,115 @@ final class SplittingSeedsViewModel: ObservableObject {
     // MARK: - Setup
 
     func setUpNewGame() {
-        roundTask?.cancel()
-        correctCount = 0
-        wrongCount = 0
-        runningScore = 0
-        currentRoundIndex = 0
+        timerCancellable?.cancel()
+        score = 0
+        level = 1
+        roundInLevel = 0
+        timeRemaining = Self.totalGameSeconds
         lastAnswerWasCorrect = nil
-        rounds = Self.generateRounds(count: Self.totalRounds)
-        phase = .playing
         gameStartedAt = Date()
-        beginRound(at: 0)
+        phase = .playing
+        beginRound()
+        startTimer()
     }
 
-    /// Generates a mix of correct and incorrect claims. Total seed
-    /// counts are always chosen as even numbers scaled by round
-    /// difficulty, so an exact even split (`totalSeeds / 2`) always
-    /// exists — a "correct" claim round is never accidentally
-    /// unsolvable. Incorrect claims offset the true half-value by a
-    /// small random amount that's guaranteed non-zero.
-    private static func generateRounds(count: Int) -> [Round] {
-        var result: [Round] = []
-        for index in 0..<count {
-            let progress = Double(index) / Double(max(1, count - 1))
-            let maxHalf = 6 + Int((24.0 * progress).rounded()) // grows from 6 to 30
-            let half = Int.random(in: 2...max(2, maxHalf))
-            let total = half * 2
+    private func startTimer() {
+        timerCancellable = Timer.publish(every: 1, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in self?.tick() }
+    }
 
-            let isCorrect = Bool.random()
-            let claimed: Int
-            if isCorrect {
-                claimed = half
-            } else {
-                let offset = Int.random(in: 1...max(1, half / 2 + 1))
-                claimed = Bool.random() ? half + offset : max(0, half - offset)
-            }
-            let actuallyCorrect = (claimed == half)
-            result.append(Round(totalSeeds: total, claimedPerGroup: claimed, isCorrectClaim: actuallyCorrect))
+    private func tick() {
+        guard phase == .playing else { return }
+        timeRemaining -= 1
+        if timeRemaining <= 0 {
+            timeRemaining = 0
+            endGame()
         }
-        return result
     }
 
     // MARK: - Round lifecycle
 
-    private func beginRound(at index: Int) {
-        guard index < rounds.count else {
-            endGame()
-            return
+    private func beginRound() {
+        let count = min(Self.maxSeedCount, Self.baseSeedCount + (level - 1) * 2)
+        seeds = Self.generateSeeds(count: count, level: level)
+        stickAngle = Double.random(in: 0..<(2 * .pi))
+        isLockingIn = false
+        lastAnswerWasCorrect = nil
+        recomputeCounts()
+    }
+
+    private static func generateSeeds(count: Int, level: Int) -> [Seed] {
+        let tightness = min(0.5, Double(level - 1) * 0.06)
+        let minRadius = 0.28 + tightness
+        let maxRadius = max(minRadius + 0.1, 1.0 - tightness)
+        return (0..<count).map { index in
+            Seed(
+                id: index,
+                angle: Double.random(in: 0..<(2 * .pi)),
+                radiusFraction: Double.random(in: minRadius...maxRadius)
+            )
         }
-        roundTask?.cancel()
+    }
 
-        currentRoundIndex = index
-        let round = rounds[index]
-        totalSeeds = round.totalSeeds
-        claimedPerGroup = round.claimedPerGroup
-        hasAnsweredCurrentRound = false
-        roundStartedAt = Date()
-        timeRemainingFraction = 1.0
+    // MARK: - Drag updates
 
-        let progress = Double(index) / Double(max(1, Self.totalRounds - 1))
-        currentResponseWindow = Self.baseResponseWindowSeconds - (Self.baseResponseWindowSeconds - Self.minResponseWindowSeconds) * progress
+    /// Called live from the View's DragGesture as the user rotates the stick.
+    func updateStickAngle(to angle: Double) {
+        guard phase == .playing else { return }
+        stickAngle = angle
+        recomputeCounts()
+    }
 
-        roundTask = Task { [weak self] in
-            guard let self else { return }
-            let steps = 20
-            let stepDuration = self.currentResponseWindow / Double(steps)
-            for step in 1...steps {
-                try? await Task.sleep(nanoseconds: UInt64(stepDuration * 1_000_000_000))
-                if Task.isCancelled { return }
-                self.timeRemainingFraction = max(0, 1.0 - Double(step) / Double(steps))
+    private func recomputeCounts() {
+        var left = 0
+        var right = 0
+        for seed in seeds {
+            if Self.isOnLeft(seedAngle: seed.angle, stickAngle: stickAngle) {
+                left += 1
+            } else {
+                right += 1
             }
-            guard !Task.isCancelled else { return }
-            self.handleTimeout()
         }
+        leftCount = left
+        rightCount = right
     }
 
-    private func handleTimeout() {
-        guard phase == .playing, !hasAnsweredCurrentRound else { return }
-        hasAnsweredCurrentRound = true
-        wrongCount += 1
-        lastAnswerWasCorrect = false
-        runningScore -= 20
-        advanceToNextRound()
+    /// Which half-plane (relative to the stick's line through the pivot) the seed falls on.
+    private static func isOnLeft(seedAngle: Double, stickAngle: Double) -> Bool {
+        sin(seedAngle - stickAngle) >= 0
     }
 
-    // MARK: - Answering
+    // MARK: - Lock in
 
-    /// Scoring rule (consistent with Speed Match's precedent): a
-    /// correct answer scores 40–100 points on a linear scale based on
-    /// reaction time — instant taps earn the full 100, taps at the
-    /// edge of the window still earn 40. Wrong answers and timeouts
-    /// subtract 20. Final score is floored at 0.
-    func answer(_ answer: Answer) {
-        guard phase == .playing, !hasAnsweredCurrentRound else { return }
-        hasAnsweredCurrentRound = true
-        roundTask?.cancel()
+    func lockIn() {
+        guard phase == .playing, !isLockingIn, !seeds.isEmpty else { return }
+        isLockingIn = true
 
-        let round = rounds[currentRoundIndex]
-        let userSaysTrue = (answer == .trueAnswer)
-        let isCorrect = userSaysTrue == round.isCorrectClaim
+        let isCorrect = leftCount == rightCount
+        lastAnswerWasCorrect = isCorrect
 
         if isCorrect {
-            correctCount += 1
-            lastAnswerWasCorrect = true
-
-            let elapsed = roundStartedAt.map { Date().timeIntervalSince($0) } ?? currentResponseWindow
-            let clampedElapsed = min(max(elapsed, 0), currentResponseWindow)
-            let speedFraction = 1.0 - (clampedElapsed / currentResponseWindow)
-            runningScore += 40 + Int((60.0 * speedFraction).rounded())
+            score += 100
+            roundInLevel += 1
+            if roundInLevel >= Self.roundsPerLevel {
+                roundInLevel = 0
+                level += 1
+            }
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
         } else {
-            wrongCount += 1
-            lastAnswerWasCorrect = false
-            runningScore -= 20
+            timeRemaining = max(0, timeRemaining - Self.wrongAnswerTimePenalty)
+            UINotificationFeedbackGenerator().notificationOccurred(.error)
         }
 
-        advanceToNextRound()
-    }
-
-    private func advanceToNextRound() {
-        let nextIndex = currentRoundIndex + 1
         Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 250_000_000)
+            try? await Task.sleep(nanoseconds: 450_000_000) // let the user see correct/incorrect feedback
             guard let self else { return }
-            self.beginRound(at: nextIndex)
+            if self.timeRemaining <= 0 {
+                self.endGame()
+            } else {
+                self.beginRound()
+            }
         }
     }
 
@@ -207,14 +190,13 @@ final class SplittingSeedsViewModel: ObservableObject {
 
     private func endGame() {
         guard phase == .playing else { return }
-        roundTask?.cancel()
+        timerCancellable?.cancel()
 
-        let score = max(0, runningScore)
         let duration: Int
         if let gameStartedAt {
             duration = max(1, Int(Date().timeIntervalSince(gameStartedAt).rounded()))
         } else {
-            duration = Int(Double(Self.totalRounds) * Self.baseResponseWindowSeconds)
+            duration = Self.totalGameSeconds
         }
 
         phase = .submitting
@@ -224,11 +206,11 @@ final class SplittingSeedsViewModel: ObservableObject {
             await self.gameResultViewModel.submitResult(
                 gameName: "Splitting Seeds",
                 category: "Math",
-                score: score,
+                score: self.score,
                 durationSeconds: duration,
-                isFitTest: isFitTest
+                isFitTest: self.isFitTest
             )
-            self.phase = .finished(score: score)
+            self.phase = .finished(score: self.score)
         }
     }
 }

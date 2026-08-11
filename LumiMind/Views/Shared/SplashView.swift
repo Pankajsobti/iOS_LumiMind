@@ -36,7 +36,7 @@ struct SplashView: View {
 
     var body: some View {
         ZStack {
-            DesignSystem.memoryGradient
+           DesignSystem.primaryGradient
                 .ignoresSafeArea()
 
             VStack(spacing: DesignSystem.Spacing.md) {

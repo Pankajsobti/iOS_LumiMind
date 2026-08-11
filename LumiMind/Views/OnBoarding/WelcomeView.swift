@@ -94,4 +94,4 @@ struct WelcomeView: View {
 
 #Preview {
     WelcomeView(onGetStarted: {})
-}in 
+} 

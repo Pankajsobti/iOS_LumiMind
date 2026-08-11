@@ -4,10 +4,11 @@
 //
 //  Presentational only — renders the seed pile + rotating stick and
 //  forwards the drag angle into the ViewModel's `updateStickAngle(to:)`,
-//  and the lock-in tap into `lockIn()`. This pass adds polish only (no
-//  gameplay logic changes): spring-smoothed stick rotation, seed pop-in
-//  on round change, a pressable Lock In button, glassy HUD/target cards,
-//  a pulsing pivot marker, and a subtle vignette on the play field.
+//  and the lock-in tap into `lockIn()`. Seeds have a fixed "home" angle
+//  used for scoring (unchanged, lives in the ViewModel), but their
+//  DISPLAY position is nudged here as the stick sweeps near them —
+//  simulating the stick physically pushing seeds aside — then springs
+//  back once the stick passes. Purely visual; does not affect gameplay.
 //
 
 import SwiftUI
@@ -142,7 +143,6 @@ struct SplittingSeedsView: View {
             ZStack {
                 forestBackdrop(size: geo.size)
 
-                // Vignette for depth
                 RadialGradient(
                     colors: [.clear, .black.opacity(0.14)],
                     center: .center,
@@ -172,7 +172,8 @@ struct SplittingSeedsView: View {
                     )
                     .position(center)
 
-                // Seeds — fixed positions, teardrop shape, pop in on round change
+                // Seeds — home angle fixed (scoring truth), but display
+                // position is nudged aside as the stick sweeps near them.
                 ForEach(viewModel.seeds) { seed in
                     SeedShape()
                         .fill(
@@ -184,7 +185,8 @@ struct SplittingSeedsView: View {
                         .frame(width: 20, height: 26)
                         .rotationEffect(.radians(seed.angle + .pi / 2))
                         .shadow(color: .black.opacity(0.3), radius: 1.5, y: 1)
-                        .position(seedPosition(seed, center: center, playRadius: playRadius))
+                        .position(seedDisplayPosition(seed, center: center, playRadius: playRadius, stickAngle: viewModel.stickAngle))
+                        .animation(.interpolatingSpring(stiffness: 300, damping: 18), value: viewModel.stickAngle)
                         .transition(.scale(scale: 0.3).combined(with: .opacity))
                         .id(seed.id)
                 }
@@ -229,7 +231,7 @@ struct SplittingSeedsView: View {
         .shadow(color: .black.opacity(0.12), radius: 14, y: 8)
     }
 
-    // MARK: Forest backdrop (leaves + simple bird silhouettes, native-drawn)
+    // MARK: Forest backdrop
 
     private func forestBackdrop(size: CGSize) -> some View {
         ZStack {
@@ -268,11 +270,48 @@ struct SplittingSeedsView: View {
         }
     }
 
+    /// Base position from the seed's fixed home angle (used for scoring, unchanged).
     private func seedPosition(_ seed: SplittingSeedsViewModel.Seed, center: CGPoint, playRadius: CGFloat) -> CGPoint {
         let r = playRadius * seed.radiusFraction
         return CGPoint(
             x: center.x + r * cos(seed.angle),
             y: center.y + r * sin(seed.angle)
+        )
+    }
+
+    /// Display-only position: nudges the seed away from the stick's line as
+    /// the stick sweeps close to the seed's home angle, and pushes it
+    /// slightly outward too — simulating the stick physically shoving it
+    /// aside. Springs back to its home position once the stick moves away.
+    /// Scoring never reads this — only `seed.angle` (the fixed home angle).
+    private func seedDisplayPosition(
+        _ seed: SplittingSeedsViewModel.Seed,
+        center: CGPoint,
+        playRadius: CGFloat,
+        stickAngle: Double
+    ) -> CGPoint {
+        let influenceZone = 0.5 // radians — how close the stick must get to start pushing
+        let maxAngularPush = 0.4 // radians — max angular nudge at closest approach
+        let maxRadialPush: CGFloat = 14 // points — max outward shove at closest approach
+
+        var diff = seed.angle - stickAngle
+        // Normalize to (-pi, pi]
+        while diff > .pi { diff -= 2 * .pi }
+        while diff <= -.pi { diff += 2 * .pi }
+        let absDiff = abs(diff)
+
+        guard absDiff < influenceZone else {
+            return seedPosition(seed, center: center, playRadius: playRadius)
+        }
+
+        let closeness = (influenceZone - absDiff) / influenceZone // 0...1, 1 = stick right on top of seed
+        let pushDirection: Double = diff >= 0 ? 1 : -1
+        let nudgedAngle = seed.angle + pushDirection * maxAngularPush * closeness
+        let nudgedRadius = playRadius * seed.radiusFraction + maxRadialPush * closeness
+
+        return CGPoint(
+            x: center.x + nudgedRadius * cos(nudgedAngle),
+            y: center.y + nudgedRadius * sin(nudgedAngle)
         )
     }
 
@@ -317,7 +356,6 @@ struct SplittingSeedsView: View {
             .clipShape(Circle())
             .overlay(Circle().stroke(.white, lineWidth: 2))
             .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
-            .scaleEffect(1.0)
             .position(position)
             .animation(.interpolatingSpring(stiffness: 260, damping: 22), value: position.x)
             .animation(.spring(response: 0.25, dampingFraction: 0.45), value: count)

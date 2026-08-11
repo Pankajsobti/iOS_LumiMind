@@ -29,9 +29,9 @@ enum DesignSystem {
 
     // MARK: - Primary Gradient
 
-    /// Primary button gradient — orange-to-coral (#FF8C5A → #FF6B4A)
+    /// Primary button gradient — violet-to-lavender (#6D5DE7 → #A19AFE)
     static let primaryGradient = LinearGradient(
-        colors: [Color(hex: "#FF8C5A"), Color(hex: "#FF6B4A")],
+        colors: [Color(hex: "#6D5DE7"), Color(hex: "#A19AFE")],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
@@ -39,10 +39,10 @@ enum DesignSystem {
     // MARK: - Game Category Gradients
     //
     // Six distinct, harmonious 2-color gradients — one per game category.
-    // Each occupies a different region of the color wheel from the warm
-    // orange/coral primary so categories stay visually distinguishable
-    // at a glance, while still reading as part of the same warm,
-    // energetic family (consistent saturation/brightness range).
+    // Each occupies a different region of the color wheel from the
+    // violet-lavender primary so categories stay visually distinguishable
+    // at a glance. Memory was shifted from indigo/violet to plum/berry
+    // since it previously overlapped with the new primary hue.
 
     /// Speed — fiery red-orange to amber. Urgent, fast, high-energy.
     static let speedGradient = LinearGradient(
@@ -51,9 +51,10 @@ enum DesignSystem {
         endPoint: .bottomTrailing
     )
 
-    /// Memory — indigo to soft violet. Calm, contemplative, deep focus.
+    /// Memory — plum to berry pink. Calm, contemplative, deep focus.
+    /// (Shifted off indigo/violet, which now overlaps the primary gradient.)
     static let memoryGradient = LinearGradient(
-        colors: [Color(hex: "#6C5CE7"), Color(hex: "#A29BFE")],
+        colors: [Color(hex: "#9B3F8F"), Color(hex: "#D46BB5")],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )

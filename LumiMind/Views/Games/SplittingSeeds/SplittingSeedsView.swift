@@ -28,6 +28,7 @@ struct SplittingSeedsView: View {
 
             VStack(spacing: DesignSystem.Spacing.md) {
                 header
+                targetBanner
                 playField
                     .padding(.horizontal, DesignSystem.Spacing.md)
                 lockInButton
@@ -69,6 +70,14 @@ struct SplittingSeedsView: View {
         .background(DesignSystem.mathGradient)
         .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius))
         .padding(.horizontal, DesignSystem.Spacing.md)
+    }
+
+
+    private var targetBanner: some View {
+        Text("Split into \(viewModel.targetGroupA) and \(viewModel.targetGroupB)")
+            .font(DesignSystem.headline)
+            .foregroundColor(DesignSystem.backgroundOnboarding)
+            .padding(.horizontal, DesignSystem.Spacing.md)
     }
 
     private func hudItem(label: String, value: String) -> some View {
@@ -134,14 +143,18 @@ struct SplittingSeedsView: View {
                 countBubble(count: viewModel.rightCount, isLeft: false, center: center, playRadius: playRadius)
 
                 if let correct = viewModel.lastAnswerWasCorrect {
-                    Text(correct ? "Correct!" : "Not quite")
-                        .font(DesignSystem.headline)
-                        .foregroundColor(.white)
-                        .padding(.horizontal, DesignSystem.Spacing.md)
-                        .padding(.vertical, DesignSystem.Spacing.xs)
-                        .background(correct ? Color(hex: "#2ECC71") : Color(hex: "#FF6B4A"))
-                        .clipShape(Capsule())
-                        .position(x: center.x, y: DesignSystem.Spacing.lg)
+                    HStack(spacing: DesignSystem.Spacing.xs) {
+                        Image(systemName: correct ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .font(.system(size: 18, weight: .bold))
+                        Text(correct ? "Correct!" : "Not quite")
+                            .font(DesignSystem.headline)
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, DesignSystem.Spacing.md)
+                    .padding(.vertical, DesignSystem.Spacing.xs)
+                    .background(correct ? Color(hex: "#2ECC71") : Color(hex: "#FF6B4A"))
+                    .clipShape(Capsule())
+                    .position(x: center.x, y: DesignSystem.Spacing.lg)
                 }
             }
             .contentShape(Rectangle())

@@ -2,14 +2,16 @@
 //  SplittingSeedsViewModel.swift
 //  LumiMind
 //
-//  Owns gameplay state for Splitting Seeds: seeds sit at fixed random
-//  positions each round, the user rotates a stick (View forwards drag
-//  angle into `updateStickAngle(to:)`), live per-side counts are
-//  recomputed on every angle change, and `lockIn()` checks for an even
-//  split. Seed count is always even, so an exact 50/50 angle always
-//  exists — no round is unsolvable. Wrong locks cost time instead of a
-//  life (GameResult has no lives field); correct locks add score and
-//  advance a 4-round pip indicator, leveling up every 4 correct rounds.
+//  Owns gameplay state for Splitting Seeds: each round has seeds at
+//  fixed random positions plus two FIXED TARGET numbers (e.g. "6 and 2")
+//  that the round requires. A hidden solution angle is generated first,
+//  and the actual seed counts at that angle become the round's targets —
+//  guaranteeing a solution always exists. The user rotates the stick
+//  (View forwards drag angle into `updateStickAngle(to:)`), live counts
+//  update per side, and `lockIn()` checks whether the current split
+//  (order-independent) matches the two targets. Wrong locks cost time
+//  instead of a life; correct locks add score and advance a 4-round pip
+//  indicator, leveling up every 4 correct rounds.
 
 import Foundation
 import Combine
@@ -48,6 +50,9 @@ final class SplittingSeedsViewModel: ObservableObject {
     @Published private(set) var stickAngle: Double = 0.35
     @Published private(set) var leftCount: Int = 0
     @Published private(set) var rightCount: Int = 0
+    /// The two group sizes this round requires the split to match (order-independent).
+    @Published private(set) var targetGroupA: Int = 0
+    @Published private(set) var targetGroupB: Int = 0
     @Published private(set) var timeRemaining: Int = SplittingSeedsViewModel.totalGameSeconds
     @Published private(set) var score: Int = 0
     @Published private(set) var level: Int = 1
@@ -109,6 +114,11 @@ final class SplittingSeedsViewModel: ObservableObject {
         stickAngle = Double.random(in: 0..<(2 * .pi))
         isLockingIn = false
         lastAnswerWasCorrect = nil
+
+        let (a, b) = Self.generateTargets(for: seeds)
+        targetGroupA = a
+        targetGroupB = b
+
         recomputeCounts()
     }
 
@@ -123,6 +133,25 @@ final class SplittingSeedsViewModel: ObservableObject {
                 radiusFraction: Double.random(in: minRadius...maxRadius)
             )
         }
+    }
+
+    /// Picks a hidden "solution angle" and reads off the actual seed
+    /// counts at that angle — this guarantees a real stick angle exists
+    /// that produces exactly these two numbers. Retries a few times to
+    /// avoid a degenerate 0/N target.
+    private static func generateTargets(for seeds: [Seed]) -> (Int, Int) {
+        guard !seeds.isEmpty else { return (0, 0) }
+        for _ in 0..<6 {
+            let solutionAngle = Double.random(in: 0..<(2 * .pi))
+            let left = seeds.filter { isOnLeft(seedAngle: $0.angle, stickAngle: solutionAngle) }.count
+            let right = seeds.count - left
+            if left > 0 && right > 0 {
+                return (left, right)
+            }
+        }
+        // Fallback: even split.
+        let half = seeds.count / 2
+        return (half, seeds.count - half)
     }
 
     // MARK: - Drag updates
@@ -159,7 +188,9 @@ final class SplittingSeedsViewModel: ObservableObject {
         guard phase == .playing, !isLockingIn, !seeds.isEmpty else { return }
         isLockingIn = true
 
-        let isCorrect = leftCount == rightCount
+        let currentSplit = [leftCount, rightCount].sorted()
+        let target = [targetGroupA, targetGroupB].sorted()
+        let isCorrect = currentSplit == target
         lastAnswerWasCorrect = isCorrect
 
         if isCorrect {
@@ -176,7 +207,7 @@ final class SplittingSeedsViewModel: ObservableObject {
         }
 
         Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 450_000_000) // let the user see correct/incorrect feedback
+            try? await Task.sleep(nanoseconds: 650_000_000) // let the user see the tick/cross feedback
             guard let self else { return }
             if self.timeRemaining <= 0 {
                 self.endGame()

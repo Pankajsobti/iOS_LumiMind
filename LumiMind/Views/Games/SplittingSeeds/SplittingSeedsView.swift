@@ -5,10 +5,10 @@
 //  Presentational only — renders the seed pile + rotating stick and
 //  forwards the drag angle into the ViewModel's `updateStickAngle(to:)`,
 //  and the lock-in tap into `lockIn()`. Header/HUD follows the same
-//  pattern as the other five games (category gradient card), reskinned
-//  from Lumosity's forest scene onto LumiMind's cream background using
-//  the Math category's emerald/mint gradient throughout instead of a
-//  themed illustration.
+//  pattern as the other five games (category gradient card). Play field
+//  now carries a forest backdrop (leaves + simple bird silhouettes,
+//  drawn natively rather than as bitmap assets) closer to the reference,
+//  with a real wooden-look stick and larger, clearly-fixed teardrop seeds.
 //
 
 import SwiftUI
@@ -97,31 +97,35 @@ struct SplittingSeedsView: View {
             let stickLength = playRadius * 2.3
 
             ZStack {
-                RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius)
-                    .fill(DesignSystem.mathGradient.opacity(0.12))
+                forestBackdrop(size: geo.size)
 
-                // Stick
-                Capsule()
-                    .fill(DesignSystem.mathGradient)
-                    .frame(width: stickLength, height: 10)
-                    .rotationEffect(.radians(viewModel.stickAngle))
+                // Stick — wooden
+                woodenStick(length: stickLength)
                     .scaleEffect(viewModel.lastAnswerWasCorrect != nil ? 1.04 : 1.0)
                     .animation(.spring(response: 0.25, dampingFraction: 0.5), value: viewModel.lastAnswerWasCorrect)
+                    .rotationEffect(.radians(viewModel.stickAngle))
                     .position(center)
 
                 // Pivot marker
                 Circle()
                     .fill(.white)
                     .frame(width: 14, height: 14)
-                    .overlay(Circle().stroke(DesignSystem.backgroundOnboarding.opacity(0.3), lineWidth: 2))
+                    .overlay(Circle().stroke(Color(hex: "#4A2E17").opacity(0.4), lineWidth: 2))
+                    .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
                     .position(center)
 
-                // Seeds
+                // Seeds — fixed positions, teardrop shape, don't move
                 ForEach(viewModel.seeds) { seed in
-                    Image(systemName: "drop.fill")
-                        .font(.system(size: 16))
-                        .foregroundColor(DesignSystem.backgroundOnboarding.opacity(0.85))
+                    SeedShape()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(hex: "#4A3728"), Color(hex: "#241811")],
+                                startPoint: .top, endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 20, height: 26)
                         .rotationEffect(.radians(seed.angle + .pi / 2))
+                        .shadow(color: .black.opacity(0.3), radius: 1.5, y: 1)
                         .position(seedPosition(seed, center: center, playRadius: playRadius))
                 }
 
@@ -156,12 +160,79 @@ struct SplittingSeedsView: View {
         .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius))
     }
 
+    // MARK: Forest backdrop (leaves + simple bird silhouettes, native-drawn)
+
+    private func forestBackdrop(size: CGSize) -> some View {
+        ZStack {
+            LinearGradient(
+                colors: [Color(hex: "#4E7A52"), Color(hex: "#3B5F40")],
+                startPoint: .top, endPoint: .bottom
+            )
+
+            // Corner leaf clusters
+            leafCluster
+                .position(x: 28, y: 24)
+            leafCluster
+                .rotationEffect(.degrees(180))
+                .position(x: size.width - 28, y: size.height - 24)
+
+            // Two simple bird silhouettes, opposite corners — like the reference
+            BirdSilhouette()
+                .fill(Color(hex: "#6B4226"))
+                .frame(width: 34, height: 26)
+                .position(x: size.width - 40, y: 34)
+            BirdSilhouette()
+                .fill(Color(hex: "#6B4226"))
+                .scaleEffect(x: -1, y: 1)
+                .frame(width: 34, height: 26)
+                .position(x: 40, y: size.height - 34)
+        }
+    }
+
+    private var leafCluster: some View {
+        ZStack {
+            ForEach(0..<3, id: \.self) { i in
+                Image(systemName: "leaf.fill")
+                    .font(.system(size: 16))
+                    .foregroundColor(Color(hex: "#2F4D33").opacity(0.6))
+                    .rotationEffect(.degrees(Double(i) * 35))
+                    .offset(x: CGFloat(i) * 6, y: CGFloat(i) * 4)
+            }
+        }
+    }
+
     private func seedPosition(_ seed: SplittingSeedsViewModel.Seed, center: CGPoint, playRadius: CGFloat) -> CGPoint {
         let r = playRadius * seed.radiusFraction
         return CGPoint(
             x: center.x + r * cos(seed.angle),
             y: center.y + r * sin(seed.angle)
         )
+    }
+
+    private func woodenStick(length: CGFloat) -> some View {
+        Capsule()
+            .fill(
+                LinearGradient(
+                    colors: [Color(hex: "#A9764B"), Color(hex: "#6B4226")],
+                    startPoint: .top, endPoint: .bottom
+                )
+            )
+            .frame(width: length, height: 14)
+            .overlay(
+                Capsule().stroke(Color(hex: "#4A2E17").opacity(0.5), lineWidth: 1)
+            )
+            .overlay(
+                HStack(spacing: length / 7) {
+                    ForEach(0..<6, id: \.self) { _ in
+                        Rectangle()
+                            .fill(Color(hex: "#4A2E17").opacity(0.22))
+                            .frame(width: 1)
+                    }
+                }
+                .frame(width: length, height: 14)
+                .clipShape(Capsule())
+            )
+            .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
     }
 
     /// Bubble sits at a fixed offset perpendicular-ish to the stick on its
@@ -181,6 +252,7 @@ struct SplittingSeedsView: View {
             .background(DesignSystem.mathGradient)
             .clipShape(Circle())
             .overlay(Circle().stroke(.white, lineWidth: 2))
+            .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
             .position(position)
             .animation(.easeOut(duration: 0.12), value: count)
     }
@@ -258,6 +330,53 @@ struct SplittingSeedsView: View {
             .background(DesignSystem.backgroundOnboarding)
             .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius))
         }
+    }
+}
+
+// MARK: - SeedShape
+
+/// Simple teardrop, point-up before rotation.
+private struct SeedShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let w = rect.width
+        let h = rect.height
+        path.move(to: CGPoint(x: w / 2, y: 0))
+        path.addQuadCurve(to: CGPoint(x: w, y: h * 0.65), control: CGPoint(x: w * 0.95, y: h * 0.15))
+        path.addArc(center: CGPoint(x: w / 2, y: h * 0.65), radius: w / 2, startAngle: .degrees(0), endAngle: .degrees(180), clockwise: false)
+        path.addQuadCurve(to: CGPoint(x: w / 2, y: 0), control: CGPoint(x: w * 0.05, y: h * 0.15))
+        path.closeSubpath()
+        return path
+    }
+}
+
+// MARK: - BirdSilhouette
+
+/// A minimal, single-color bird silhouette — round body, small head, beak,
+/// simple tail. Drawn natively (no bitmap asset) to stay consistent with
+/// the app's flat, token-driven art direction.
+private struct BirdSilhouette: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let w = rect.width
+        let h = rect.height
+
+        // Body
+        path.addEllipse(in: CGRect(x: w * 0.15, y: h * 0.25, width: w * 0.6, height: h * 0.6))
+        // Head
+        path.addEllipse(in: CGRect(x: w * 0.55, y: h * 0.05, width: w * 0.35, height: h * 0.35))
+        // Beak
+        path.move(to: CGPoint(x: w * 0.9, y: h * 0.2))
+        path.addLine(to: CGPoint(x: w * 1.0, y: h * 0.24))
+        path.addLine(to: CGPoint(x: w * 0.9, y: h * 0.3))
+        path.closeSubpath()
+        // Tail
+        path.move(to: CGPoint(x: w * 0.15, y: h * 0.5))
+        path.addLine(to: CGPoint(x: 0, y: h * 0.35))
+        path.addLine(to: CGPoint(x: 0, y: h * 0.6))
+        path.closeSubpath()
+
+        return path
     }
 }
 

@@ -4,11 +4,10 @@
 //
 //  Presentational only — renders the seed pile + rotating stick and
 //  forwards the drag angle into the ViewModel's `updateStickAngle(to:)`,
-//  and the lock-in tap into `lockIn()`. Header/HUD follows the same
-//  pattern as the other five games (category gradient card). Play field
-//  now carries a forest backdrop (leaves + simple bird silhouettes,
-//  drawn natively rather than as bitmap assets) closer to the reference,
-//  with a real wooden-look stick and larger, clearly-fixed teardrop seeds.
+//  and the lock-in tap into `lockIn()`. This pass adds polish only (no
+//  gameplay logic changes): spring-smoothed stick rotation, seed pop-in
+//  on round change, a pressable Lock In button, glassy HUD/target cards,
+//  a pulsing pivot marker, and a subtle vignette on the play field.
 //
 
 import SwiftUI
@@ -16,6 +15,7 @@ import SwiftUI
 struct SplittingSeedsView: View {
     @StateObject private var viewModel: SplittingSeedsViewModel
     var onComplete: () -> Void
+    @State private var pivotPulse = false
 
     init(gameResultViewModel: GameResultViewModel, isFitTest: Bool = false, onComplete: @escaping () -> Void) {
         _viewModel = StateObject(wrappedValue: SplittingSeedsViewModel(gameResultViewModel: gameResultViewModel, isFitTest: isFitTest))
@@ -43,6 +43,11 @@ struct SplittingSeedsView: View {
                 finishedOverlay(score: score)
             }
         }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
+                pivotPulse = true
+            }
+        }
     }
 
     // MARK: Header (TIME / SCORE / LEVEL + pips)
@@ -52,6 +57,7 @@ struct SplittingSeedsView: View {
             hudItem(label: "TIME", value: formattedTime)
             Spacer()
             hudItem(label: "SCORE", value: "\(viewModel.score)")
+                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: viewModel.score)
             Spacer()
             VStack(alignment: .trailing, spacing: DesignSystem.Spacing.xxs) {
                 Text("LEVEL \(viewModel.level)")
@@ -62,22 +68,22 @@ struct SplittingSeedsView: View {
                         Circle()
                             .fill(index < viewModel.roundInLevel ? .white : .white.opacity(0.35))
                             .frame(width: 7, height: 7)
+                            .scaleEffect(index < viewModel.roundInLevel ? 1.15 : 1.0)
+                            .animation(.spring(response: 0.3, dampingFraction: 0.5), value: viewModel.roundInLevel)
                     }
                 }
             }
         }
         .padding(DesignSystem.Spacing.md)
-        .background(DesignSystem.mathGradient)
+        .background(
+            DesignSystem.mathGradient
+                .overlay(
+                    LinearGradient(colors: [.white.opacity(0.18), .clear], startPoint: .top, endPoint: .center)
+                )
+        )
         .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius))
+        .shadow(color: Color(hex: "#2ECC71").opacity(0.25), radius: 10, y: 5)
         .padding(.horizontal, DesignSystem.Spacing.md)
-    }
-
-
-    private var targetBanner: some View {
-        Text("Split into \(viewModel.targetGroupA) and \(viewModel.targetGroupB)")
-            .font(DesignSystem.headline)
-            .foregroundColor(DesignSystem.backgroundOnboarding)
-            .padding(.horizontal, DesignSystem.Spacing.md)
     }
 
     private func hudItem(label: String, value: String) -> some View {
@@ -97,6 +103,34 @@ struct SplittingSeedsView: View {
         return String(format: "%d:%02d", minutes, seconds)
     }
 
+    // MARK: Target banner
+
+    private var targetBanner: some View {
+        HStack(spacing: DesignSystem.Spacing.xs) {
+            Image(systemName: "divide.circle.fill")
+                .foregroundColor(DesignSystem.backgroundOnboarding.opacity(0.7))
+            Text("Split into ")
+                .foregroundColor(DesignSystem.backgroundOnboarding.opacity(0.8))
+            + Text("\(viewModel.targetGroupA)")
+                .foregroundColor(DesignSystem.backgroundOnboarding)
+                .fontWeight(.bold)
+            + Text(" and ")
+                .foregroundColor(DesignSystem.backgroundOnboarding.opacity(0.8))
+            + Text("\(viewModel.targetGroupB)")
+                .foregroundColor(DesignSystem.backgroundOnboarding)
+                .fontWeight(.bold)
+        }
+        .font(DesignSystem.headline)
+        .padding(.horizontal, DesignSystem.Spacing.lg)
+        .padding(.vertical, DesignSystem.Spacing.sm)
+        .background(.white.opacity(0.7))
+        .clipShape(Capsule())
+        .shadow(color: .black.opacity(0.06), radius: 6, y: 3)
+        .id("\(viewModel.targetGroupA)-\(viewModel.targetGroupB)")
+        .transition(.scale.combined(with: .opacity))
+        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: viewModel.targetGroupA)
+    }
+
     // MARK: Play field
 
     private var playField: some View {
@@ -108,22 +142,37 @@ struct SplittingSeedsView: View {
             ZStack {
                 forestBackdrop(size: geo.size)
 
-                // Stick — wooden
+                // Vignette for depth
+                RadialGradient(
+                    colors: [.clear, .black.opacity(0.14)],
+                    center: .center,
+                    startRadius: playRadius * 0.4,
+                    endRadius: playRadius * 1.3
+                )
+
+                // Stick — wooden, spring-smoothed rotation
                 woodenStick(length: stickLength)
                     .scaleEffect(viewModel.lastAnswerWasCorrect != nil ? 1.04 : 1.0)
-                    .animation(.spring(response: 0.25, dampingFraction: 0.5), value: viewModel.lastAnswerWasCorrect)
                     .rotationEffect(.radians(viewModel.stickAngle))
+                    .animation(.interpolatingSpring(stiffness: 260, damping: 22), value: viewModel.stickAngle)
+                    .animation(.spring(response: 0.25, dampingFraction: 0.5), value: viewModel.lastAnswerWasCorrect)
                     .position(center)
 
-                // Pivot marker
+                // Pivot marker — subtle pulse
                 Circle()
                     .fill(.white)
                     .frame(width: 14, height: 14)
                     .overlay(Circle().stroke(Color(hex: "#4A2E17").opacity(0.4), lineWidth: 2))
                     .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
+                    .overlay(
+                        Circle()
+                            .stroke(.white.opacity(0.6), lineWidth: 2)
+                            .scaleEffect(pivotPulse ? 2.0 : 1.0)
+                            .opacity(pivotPulse ? 0 : 0.8)
+                    )
                     .position(center)
 
-                // Seeds — fixed positions, teardrop shape, don't move
+                // Seeds — fixed positions, teardrop shape, pop in on round change
                 ForEach(viewModel.seeds) { seed in
                     SeedShape()
                         .fill(
@@ -136,7 +185,10 @@ struct SplittingSeedsView: View {
                         .rotationEffect(.radians(seed.angle + .pi / 2))
                         .shadow(color: .black.opacity(0.3), radius: 1.5, y: 1)
                         .position(seedPosition(seed, center: center, playRadius: playRadius))
+                        .transition(.scale(scale: 0.3).combined(with: .opacity))
+                        .id(seed.id)
                 }
+                .animation(.spring(response: 0.4, dampingFraction: 0.65), value: viewModel.seeds)
 
                 // Count bubbles
                 countBubble(count: viewModel.leftCount, isLeft: true, center: center, playRadius: playRadius)
@@ -154,7 +206,10 @@ struct SplittingSeedsView: View {
                     .padding(.vertical, DesignSystem.Spacing.xs)
                     .background(correct ? Color(hex: "#2ECC71") : Color(hex: "#FF6B4A"))
                     .clipShape(Capsule())
+                    .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
                     .position(x: center.x, y: DesignSystem.Spacing.lg)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .animation(.spring(response: 0.35, dampingFraction: 0.7), value: viewModel.lastAnswerWasCorrect)
                 }
             }
             .contentShape(Rectangle())
@@ -171,6 +226,7 @@ struct SplittingSeedsView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius))
+        .shadow(color: .black.opacity(0.12), radius: 14, y: 8)
     }
 
     // MARK: Forest backdrop (leaves + simple bird silhouettes, native-drawn)
@@ -178,18 +234,16 @@ struct SplittingSeedsView: View {
     private func forestBackdrop(size: CGSize) -> some View {
         ZStack {
             LinearGradient(
-                colors: [Color(hex: "#4E7A52"), Color(hex: "#3B5F40")],
+                colors: [Color(hex: "#588B5D"), Color(hex: "#3B5F40")],
                 startPoint: .top, endPoint: .bottom
             )
 
-            // Corner leaf clusters
             leafCluster
                 .position(x: 28, y: 24)
             leafCluster
                 .rotationEffect(.degrees(180))
                 .position(x: size.width - 28, y: size.height - 24)
 
-            // Two simple bird silhouettes, opposite corners — like the reference
             BirdSilhouette()
                 .fill(Color(hex: "#6B4226"))
                 .frame(width: 34, height: 26)
@@ -226,7 +280,7 @@ struct SplittingSeedsView: View {
         Capsule()
             .fill(
                 LinearGradient(
-                    colors: [Color(hex: "#A9764B"), Color(hex: "#6B4226")],
+                    colors: [Color(hex: "#B98254"), Color(hex: "#6B4226")],
                     startPoint: .top, endPoint: .bottom
                 )
             )
@@ -245,12 +299,9 @@ struct SplittingSeedsView: View {
                 .frame(width: length, height: 14)
                 .clipShape(Capsule())
             )
-            .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
+            .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
     }
 
-    /// Bubble sits at a fixed offset perpendicular-ish to the stick on its
-    /// respective side, rotating with the stick so it stays visually paired
-    /// with the seeds on that side.
     private func countBubble(count: Int, isLeft: Bool, center: CGPoint, playRadius: CGFloat) -> some View {
         let perpendicular = viewModel.stickAngle + (isLeft ? .pi / 2 : -.pi / 2)
         let r = playRadius * 0.55
@@ -265,9 +316,11 @@ struct SplittingSeedsView: View {
             .background(DesignSystem.mathGradient)
             .clipShape(Circle())
             .overlay(Circle().stroke(.white, lineWidth: 2))
-            .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
+            .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
+            .scaleEffect(1.0)
             .position(position)
-            .animation(.easeOut(duration: 0.12), value: count)
+            .animation(.interpolatingSpring(stiffness: 260, damping: 22), value: position.x)
+            .animation(.spring(response: 0.25, dampingFraction: 0.45), value: count)
     }
 
     // MARK: Lock-in button
@@ -282,9 +335,10 @@ struct SplittingSeedsView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, DesignSystem.Spacing.md)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableButtonStyle())
         .background(DesignSystem.primaryGradient)
         .clipShape(Capsule())
+        .shadow(color: Color(hex: "#6D5DE7").opacity(0.35), radius: 10, y: 5)
         .padding(.horizontal, DesignSystem.Spacing.md)
         .disabled(viewModel.phase != .playing)
     }
@@ -333,7 +387,7 @@ struct SplittingSeedsView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, DesignSystem.Spacing.md)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressableButtonStyle())
                 .background(DesignSystem.primaryGradient)
                 .clipShape(Capsule())
                 .padding(.top, DesignSystem.Spacing.sm)
@@ -346,9 +400,19 @@ struct SplittingSeedsView: View {
     }
 }
 
+// MARK: - PressableButtonStyle
+
+private struct PressableButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .opacity(configuration.isPressed ? 0.9 : 1.0)
+            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
 // MARK: - SeedShape
 
-/// Simple teardrop, point-up before rotation.
 private struct SeedShape: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
@@ -365,25 +429,18 @@ private struct SeedShape: Shape {
 
 // MARK: - BirdSilhouette
 
-/// A minimal, single-color bird silhouette — round body, small head, beak,
-/// simple tail. Drawn natively (no bitmap asset) to stay consistent with
-/// the app's flat, token-driven art direction.
 private struct BirdSilhouette: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
         let w = rect.width
         let h = rect.height
 
-        // Body
         path.addEllipse(in: CGRect(x: w * 0.15, y: h * 0.25, width: w * 0.6, height: h * 0.6))
-        // Head
         path.addEllipse(in: CGRect(x: w * 0.55, y: h * 0.05, width: w * 0.35, height: h * 0.35))
-        // Beak
         path.move(to: CGPoint(x: w * 0.9, y: h * 0.2))
         path.addLine(to: CGPoint(x: w * 1.0, y: h * 0.24))
         path.addLine(to: CGPoint(x: w * 0.9, y: h * 0.3))
         path.closeSubpath()
-        // Tail
         path.move(to: CGPoint(x: w * 0.15, y: h * 0.5))
         path.addLine(to: CGPoint(x: 0, y: h * 0.35))
         path.addLine(to: CGPoint(x: 0, y: h * 0.6))

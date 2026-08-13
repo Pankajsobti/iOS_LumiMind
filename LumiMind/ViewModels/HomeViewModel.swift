@@ -54,6 +54,22 @@ final class HomeViewModel: ObservableObject {
         recommendedGame == .memoryMatrix
     }
 
+    // MARK: Today's Workout card
+
+    var workoutNumber: Int {
+        Calendar.current.ordinality(of: .day, in: .year, for: Date()) ?? 1
+    }
+
+    let totalWorkouts = 30
+
+    var todaysExercises: [GameCatalog.Game] {
+        GameCatalog.games
+    }
+
+    func isPlayable(_ game: GameCatalog.Game) -> Bool {
+        game.id == "memory_matrix"
+    }
+
     // MARK: Refresh
 
     /// Fetches the current user if we don't already have one in memory

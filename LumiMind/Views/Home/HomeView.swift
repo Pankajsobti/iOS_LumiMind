@@ -75,7 +75,14 @@ struct HomeView: View {
                 streakRow
                     .padding(.top, DesignSystem.Spacing.md)
 
-                recommendedGameCard
+                TodaysWorkoutCardView(
+                    workoutNumber: viewModel.workoutNumber,
+                    totalWorkouts: viewModel.totalWorkouts,
+                    exercises: viewModel.todaysExercises,
+                    isPlayable: viewModel.isPlayable,
+                    onStart: startRecommendedGame,
+                    onSelectExercise: startExercise
+                )
 
                 Spacer(minLength: DesignSystem.Spacing.xl)
             }
@@ -110,57 +117,17 @@ struct HomeView: View {
         }
     }
 
-    // MARK: Recommended game card
-
-    private var recommendedGameCard: some View {
-        let game = viewModel.recommendedGame
-
-        return VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
-            Text("Today's Recommended Training")
-                .font(DesignSystem.roundedFont(size: 13, weight: .bold))
-                .foregroundColor(.white.opacity(0.85))
-                .tracking(0.5)
-
-            HStack {
-                VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxs) {
-                    Text(game.rawValue)
-                        .font(DesignSystem.title2)
-                        .foregroundColor(.white)
-                    Text(game.category.rawValue)
-                        .font(DesignSystem.subheadline)
-                        .foregroundColor(.white.opacity(0.85))
-                }
-
-                Spacer()
-
-                Image(systemName: "gamecontroller.fill")
-                    .font(.system(size: 32))
-                    .foregroundColor(.white.opacity(0.9))
-            }
-
-            Button(action: startRecommendedGame) {
-                Text("Start Today's Training")
-                    .font(DesignSystem.buttonLabel)
-                    .foregroundColor(DesignSystem.backgroundOnboarding)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, DesignSystem.Spacing.sm + DesignSystem.Spacing.xxs)
-            }
-            .buttonStyle(.plain)
-            .background(DesignSystem.backgroundMain)
-            .foregroundColor(DesignSystem.backgroundOnboarding)
-            .clipShape(Capsule())
-        }
-        .padding(DesignSystem.Spacing.lg)
-        .background(game.category.gradient)
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius))
-    }
+    // MARK: Actions
 
     private func startRecommendedGame() {
-        let game = viewModel.recommendedGame
-        if viewModel.isRecommendedGamePlayable {
+        path.append(.memoryMatrix)
+    }
+
+    private func startExercise(_ game: GameCatalog.Game) {
+        if viewModel.isPlayable(game) {
             path.append(.memoryMatrix)
         } else {
-            path.append(.comingSoon(game.rawValue))
+            path.append(.comingSoon(game.name))
         }
     }
 }

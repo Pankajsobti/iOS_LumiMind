@@ -10,6 +10,7 @@ enum GameCatalog {
         let shortDescription: String
         let rules: [String]
         let scienceExplainer: String
+        var isLocked: Bool = false
     }
 
     static let games: [Game] = [
@@ -46,6 +47,7 @@ enum GameCatalog {
             name: "Lost in Migration",
             category: .attention,
             iconName: "scope",
+            isLocked: true,
             shortDescription: "Spot the bird flying against the flock.",
             rules: [
                 "A flock of birds flies in one direction.",
@@ -60,6 +62,7 @@ enum GameCatalog {
             name: "Brain Shift",
             category: .flexibility,
             iconName: "arrow.left.arrow.right",
+            isLocked: true,
             shortDescription: "Switch rules on the fly without slipping up.",
             rules: [
                 "You'll sort items by one rule, like color.",
@@ -74,6 +77,7 @@ enum GameCatalog {
             name: "Pirate Passage",
             category: .problemSolving,
             iconName: "map.fill",
+            isLocked: true,
             shortDescription: "Plan a route through shifting obstacles.",
             rules: [
                 "Guide the ship from start to the treasure.",
@@ -83,11 +87,12 @@ enum GameCatalog {
             ],
             scienceExplainer: "Pirate Passage strengthens planning and problem-solving — mapping out several moves ahead before acting. This kind of forward-thinking relies on executive function circuits that also support everyday decisions like budgeting time or navigating a new route."
         ),
-        Game(
+            Game(
             id: "splitting_seeds",
             name: "Splitting Seeds",
             category: .math,
             iconName: "divide.circle.fill",
+            isLocked: true,
             shortDescription: "Split totals quickly under time pressure.",
             rules: [
                 "A total number of seeds appears on screen.",
@@ -98,4 +103,17 @@ enum GameCatalog {
             scienceExplainer: "Splitting Seeds keeps numerical reasoning sharp by asking you to manipulate quantities quickly and accurately. Mental arithmetic under time pressure engages working memory alongside number sense, both of which are strongly tied to everyday tasks like budgeting or estimating."
         ),
     ]
+}
+
+
+extension GameCatalog {
+    static var todaysGames: [Game] {
+        GameCategory.allCases.compactMap { category in
+            games.first(where: { $0.category == category })
+        }
+    }
+
+    static func games(in category: GameCategory) -> [Game] {
+        games.filter { $0.category == category }
+    }
 }

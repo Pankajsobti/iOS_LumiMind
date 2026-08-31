@@ -40,7 +40,8 @@ struct RootView: View {
                 }
             case .welcome:
                 WelcomeView(
-                    onGetStarted: { destination = .onboardingQuestionnaire }
+                    onGetStarted: { destination = .onboardingQuestionnaire },
+                    onLogin: { destination = .login} 
                 )
             case .onboardingQuestionnaire:
                 QuestionnaireFlowView(

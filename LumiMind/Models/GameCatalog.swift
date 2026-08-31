@@ -7,6 +7,7 @@ enum GameCatalog {
         let name: String
         let category: GameCategory
         let iconName: String
+        var customImageName: String? = nil
         let shortDescription: String
         let rules: [String]
         let scienceExplainer: String
@@ -19,6 +20,7 @@ enum GameCatalog {
             name: "Memory Matrix",
             category: .memory,
             iconName: "square.grid.3x3.fill",
+            customImageName: "matrix",
             shortDescription: "Match hidden pairs before time runs out.",
             rules: [
                 "A grid of cards flips face-down after a brief preview.",
@@ -33,6 +35,7 @@ enum GameCatalog {
             name: "Speed Match",
             category: .speed,
             iconName: "bolt.fill",
+            customImageName: "speed",
             shortDescription: "React fast to spot the matching pattern.",
             rules: [
                 "Two symbols appear on screen at once.",
@@ -47,6 +50,7 @@ enum GameCatalog {
             name: "Lost in Migration",
             category: .attention,
             iconName: "scope",
+            customImageName: "arrow",
             shortDescription: "Spot the bird flying against the flock.",
             rules: [
                 "A flock of birds flies in one direction.",
@@ -92,6 +96,7 @@ enum GameCatalog {
             name: "Splitting Seeds",
             category: .math,
             iconName: "divide.circle.fill",
+            customImageName: "bird",
             shortDescription: "Split totals quickly under time pressure.",
             rules: [
                 "A total number of seeds appears on screen.",

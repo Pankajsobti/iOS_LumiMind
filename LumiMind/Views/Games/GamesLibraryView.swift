@@ -148,9 +148,18 @@ private struct GameTile: View {
                     .fill(game.category.gradient)
                     .frame(width: 140, height: 130)
                     .overlay(
-                        Image(systemName: game.iconName)
-                            .font(.system(size: 40, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.9))
+                        Group {
+                            if let customImageName = game.customImageName {
+                                Image(customImageName)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 44, height: 44)
+                            } else {
+                                Image(systemName: game.iconName)
+                                    .font(.system(size: 40, weight: .semibold))
+                                    .foregroundColor(.white.opacity(0.9))
+                            }
+                        }
                     )
 
                 if game.isLocked {

@@ -150,10 +150,11 @@ private struct GameTile: View {
                     .overlay(
                         Group {
                             if let customImageName = game.customImageName {
-                                Image(customImageName)
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 44, height: 44)
+                              Image(customImageName)
+                              .resizable()
+                              .aspectRatio(contentMode: .fill)
+                              .frame(width: 140, height: 130)
+                              .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact))
                             } else {
                                 Image(systemName: game.iconName)
                                     .font(.system(size: 40, weight: .semibold))

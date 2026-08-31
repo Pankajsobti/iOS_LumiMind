@@ -66,6 +66,7 @@ enum GameCatalog {
             name: "Brain Shift",
             category: .flexibility,
             iconName: "arrow.left.arrow.right",
+            customImageName: "shift",
             shortDescription: "Switch rules on the fly without slipping up.",
             rules: [
                 "You'll sort items by one rule, like color.",
@@ -81,6 +82,7 @@ enum GameCatalog {
             name: "Pirate Passage",
             category: .problemSolving,
             iconName: "map.fill",
+            customImageName: "pirate",
             shortDescription: "Plan a route through shifting obstacles.",
             rules: [
                 "Guide the ship from start to the treasure.",

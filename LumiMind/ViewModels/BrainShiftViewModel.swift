@@ -1,16 +1,15 @@
 import Foundation
+import SwiftUI
 import Combine
 
 // MARK: - BrainShiftViewModel
 //
-// Owns gameplay state for Brain Shift: each round shows an item with
-// two independent attributes (color, shape). The user sorts it into
-// a Left/Right bucket according to whichever rule is currently active
-// (sort by color, or sort by shape). The rule switches unannounced
-// every 4–6 rounds. Mirrors LostInMigrationViewModel's conventions —
-// View only renders published state and forwards taps into
-// `chooseBucket(_:)`; this ViewModel submits the result itself the
-// moment the game ends.
+// Owns gameplay state for Brain Shift: a 1-back symbol-matching task.
+// One symbol is shown per beat; from the second symbol onward the
+// player judges whether it matches the symbol shown immediately
+// before it (Yes/No). View only renders published state and forwards
+// taps into `answer(isMatch:)`; this ViewModel submits the result
+// itself the moment the game ends.
 
 @MainActor
 final class BrainShiftViewModel: ObservableObject {
@@ -18,64 +17,74 @@ final class BrainShiftViewModel: ObservableObject {
     // MARK: Game phase
 
     enum Phase: Equatable {
+        /// Opening beat — first symbol is shown with no decision to make.
+        case memorize
         case playing
         case submitting
         case finished(score: Int)
     }
 
-    enum Rule: Equatable {
-        case color
-        case shape
+    enum ItemSymbol: CaseIterable {
+        case circle, square, triangle, star, hexagon, diamond
 
-        var label: String {
+        var systemImageName: String {
             switch self {
-            case .color: return "Sort by Color"
-            case .shape: return "Sort by Shape"
+            case .circle:   return "circle.fill"
+            case .square:   return "square.fill"
+            case .triangle: return "triangle.fill"
+            case .star:     return "star.fill"
+            case .hexagon:  return "hexagon.fill"
+            case .diamond:  return "diamond.fill"
+            }
+        }
+
+        /// Each symbol carries a fixed, distinct color so a "match" is
+        /// a single unambiguous visual judgment (shape + color together).
+        var color: Color {
+            switch self {
+            case .circle:   return Color(hex: "#4A7BFF")
+            case .square:   return Color(hex: "#FF5E5B")
+            case .triangle: return Color(hex: "#2ECC71")
+            case .star:     return Color(hex: "#D46BB5")
+            case .hexagon:  return Color(hex: "#00C2A8")
+            case .diamond:  return Color(hex: "#F857A6")
             }
         }
     }
 
-    enum ItemColor: CaseIterable { case red, blue }
-    enum ItemShape: CaseIterable { case circle, square }
-
-    enum Bucket {
-        case left
-        case right
-    }
-
-    struct RoundItem: Equatable {
-        let color: ItemColor
-        let shape: ItemShape
-    }
-
     private struct Round {
-        let item: RoundItem
-        let rule: Rule
-        /// True for the first two rounds under a (newly or
-        /// previously) active rule — this is the cognitive-flexibility
-        /// signal the game is meant to measure, so correct answers
-        /// here score a bonus.
-        let isEarlyAfterSwitch: Bool
+        let symbol: ItemSymbol
+        /// nil for index 0 (memorize beat, no decision to make).
+        let isMatch: Bool?
     }
 
     // MARK: Tunables
 
+    /// Number of scored Yes/No decision rounds — excludes the opening
+    /// "memorize" beat. Drives the header's "n/totalRounds" display.
     static let totalRounds = 20
+    private static let totalItems = totalRounds + 1
     static let responseWindowSeconds: Double = 3.5
-    private static let minRoundsPerRule = 4
-    private static let maxRoundsPerRule = 6
+    private static let memorizeDurationSeconds: Double = 1.1
+    /// Probability that consecutive symbols match — tuned for a roughly
+    /// even mix of Yes/No correct answers across a session.
+    private static let matchProbability: Double = 0.4
 
     // MARK: Published state
 
-    @Published private(set) var phase: Phase = .playing
-    @Published private(set) var currentRoundIndex: Int = 0
-    @Published private(set) var currentItem: RoundItem = RoundItem(color: .red, shape: .circle)
-    @Published private(set) var currentRule: Rule = .color
+    @Published private(set) var phase: Phase = .memorize
+    @Published private(set) var currentItemIndex: Int = 0
+    @Published private(set) var currentSymbol: ItemSymbol = .circle
     /// 1.0 = window just opened, 0.0 = window closed.
     @Published private(set) var timeRemainingFraction: Double = 1.0
     @Published private(set) var correctCount: Int = 0
     @Published private(set) var wrongCount: Int = 0
     @Published private(set) var lastAnswerWasCorrect: Bool?
+
+    /// 1-based decision round number for header display.
+    var currentDecisionNumber: Int {
+        min(max(currentItemIndex, 1), Self.totalRounds)
+    }
 
     var isBusySubmitting: Bool { gameResultViewModel.isLoading }
     var submissionErrorMessage: String? { gameResultViewModel.errorMessage }
@@ -104,54 +113,60 @@ final class BrainShiftViewModel: ObservableObject {
         correctCount = 0
         wrongCount = 0
         runningScore = 0
-        currentRoundIndex = 0
+        currentItemIndex = 0
         lastAnswerWasCorrect = nil
-        rounds = Self.generateRounds(count: Self.totalRounds)
-        phase = .playing
+        rounds = Self.generateRounds(count: Self.totalItems)
+        phase = .memorize
         gameStartedAt = Date()
-        beginRound(at: 0)
+        beginItem(at: 0)
     }
 
     private static func generateRounds(count: Int) -> [Round] {
-        var result: [Round] = []
-        var rule: Rule = Bool.random() ? .color : .shape
-        var roundsUntilSwitch = Int.random(in: minRoundsPerRule...maxRoundsPerRule)
-        var positionInRule = 0
-
-        for _ in 0..<count {
-            if positionInRule >= roundsUntilSwitch {
-                rule = (rule == .color) ? .shape : .color
-                roundsUntilSwitch = Int.random(in: minRoundsPerRule...maxRoundsPerRule)
-                positionInRule = 0
+        var symbols: [ItemSymbol] = [ItemSymbol.allCases.randomElement()!]
+        for i in 1..<count {
+            let previous = symbols[i - 1]
+            if Double.random(in: 0...1) < matchProbability {
+                symbols.append(previous)
+            } else {
+                var next = ItemSymbol.allCases.randomElement()!
+                while next == previous {
+                    next = ItemSymbol.allCases.randomElement()!
+                }
+                symbols.append(next)
             }
-
-            let item = RoundItem(
-                color: ItemColor.allCases.randomElement()!,
-                shape: ItemShape.allCases.randomElement()!
-            )
-            let isEarly = positionInRule < 2
-            result.append(Round(item: item, rule: rule, isEarlyAfterSwitch: isEarly))
-            positionInRule += 1
         }
-        return result
+        return symbols.enumerated().map { index, symbol in
+            let isMatch = index == 0 ? nil : (symbol == symbols[index - 1])
+            return Round(symbol: symbol, isMatch: isMatch)
+        }
     }
 
-    // MARK: - Round lifecycle
+    // MARK: - Item lifecycle
 
-    private func beginRound(at index: Int) {
+    private func beginItem(at index: Int) {
         guard index < rounds.count else {
             endGame()
             return
         }
         roundTask?.cancel()
 
-        currentRoundIndex = index
-        currentItem = rounds[index].item
-        currentRule = rounds[index].rule
+        currentItemIndex = index
+        currentSymbol = rounds[index].symbol
         hasAnsweredCurrentRound = false
         roundStartedAt = Date()
         timeRemainingFraction = 1.0
 
+        if index == 0 {
+            phase = .memorize
+            roundTask = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(Self.memorizeDurationSeconds * 1_000_000_000))
+                guard let self, !Task.isCancelled else { return }
+                self.beginItem(at: index + 1)
+            }
+            return
+        }
+
+        phase = .playing
         roundTask = Task { [weak self] in
             guard let self else { return }
             let steps = 20
@@ -172,26 +187,22 @@ final class BrainShiftViewModel: ObservableObject {
         wrongCount += 1
         lastAnswerWasCorrect = false
         runningScore -= 15
-        advanceToNextRound()
+        advanceToNextItem()
     }
 
     // MARK: - Answering
 
-    /// Scoring rule: a correct answer scores 30–90 points on a linear
-    /// scale based on reaction time within the response window. Correct
-    /// answers landing in the first two rounds after a rule switch (or
-    /// the game's opening rule) earn an extra +40 "adapted fast" bonus
-    /// — that quick re-adaptation is the specific cognitive-flexibility
-    /// signal this game measures, more than raw speed alone. Wrong
+    /// Scoring: a correct Yes/No answer scores 30–90 points on a linear
+    /// scale based on reaction time within the response window. Wrong
     /// answers and timeouts subtract 15. Final score is floored at 0.
-    func chooseBucket(_ bucket: Bucket) {
+    func answer(isMatch userSaysMatch: Bool) {
         guard phase == .playing, !hasAnsweredCurrentRound else { return }
         hasAnsweredCurrentRound = true
         roundTask?.cancel()
 
-        let round = rounds[currentRoundIndex]
-        let correctBucket = Self.correctBucket(for: round.item, rule: round.rule)
-        let isCorrect = (bucket == correctBucket)
+        let round = rounds[currentItemIndex]
+        let actualIsMatch = round.isMatch ?? false
+        let isCorrect = (userSaysMatch == actualIsMatch)
 
         if isCorrect {
             correctCount += 1
@@ -201,41 +212,28 @@ final class BrainShiftViewModel: ObservableObject {
             let clampedElapsed = min(max(elapsed, 0), Self.responseWindowSeconds)
             let speedFraction = 1.0 - (clampedElapsed / Self.responseWindowSeconds)
             runningScore += 30 + Int((60.0 * speedFraction).rounded())
-
-            if round.isEarlyAfterSwitch {
-                runningScore += 40
-            }
         } else {
             wrongCount += 1
             lastAnswerWasCorrect = false
             runningScore -= 15
         }
 
-        advanceToNextRound()
+        advanceToNextItem()
     }
 
-    private static func correctBucket(for item: RoundItem, rule: Rule) -> Bucket {
-        switch rule {
-        case .color:
-            return item.color == .red ? .left : .right
-        case .shape:
-            return item.shape == .circle ? .left : .right
-        }
-    }
-
-    private func advanceToNextRound() {
-        let nextIndex = currentRoundIndex + 1
+    private func advanceToNextItem() {
+        let nextIndex = currentItemIndex + 1
         Task { [weak self] in
             try? await Task.sleep(nanoseconds: 300_000_000)
             guard let self else { return }
-            self.beginRound(at: nextIndex)
+            self.beginItem(at: nextIndex)
         }
     }
 
     // MARK: - Game over + scoring
 
     private func endGame() {
-        guard phase == .playing else { return }
+        guard phase == .playing || phase == .memorize else { return }
         roundTask?.cancel()
 
         let score = max(0, runningScore)

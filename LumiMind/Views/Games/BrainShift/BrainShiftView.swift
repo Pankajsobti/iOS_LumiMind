@@ -3,10 +3,10 @@ import SwiftUI
 // MARK: - BrainShiftView
 //
 // Presentational only — renders whatever BrainShiftViewModel reports
-// and forwards taps into `chooseBucket(_:)`. Same structure as the
-// other three games: header uses the category gradient, finished
-// overlay shows score with a Continue button that calls onComplete
-// (caller routes to ScienceExplainerView).
+// and forwards taps into `answer(isMatch:)`. Header uses the
+// Flexibility category gradient, finished overlay shows score with a
+// Continue button that calls onComplete (caller routes to
+// ScienceExplainerView), same as the other games.
 
 struct BrainShiftView: View {
     @StateObject private var viewModel: BrainShiftViewModel
@@ -23,7 +23,7 @@ struct BrainShiftView: View {
 
             VStack(spacing: DesignSystem.Spacing.lg) {
                 header
-                ruleBanner
+                instructionBanner
 
                 Spacer()
 
@@ -34,7 +34,7 @@ struct BrainShiftView: View {
 
                 Spacer()
 
-                buckets
+                answerButtons
             }
             .padding(.vertical, DesignSystem.Spacing.lg)
 
@@ -57,11 +57,11 @@ struct BrainShiftView: View {
                     .font(DesignSystem.title2)
                     .foregroundColor(.white)
                 Spacer()
-                Text("\(min(viewModel.currentRoundIndex + 1, BrainShiftViewModel.totalRounds))/\(BrainShiftViewModel.totalRounds)")
+                Text("\(viewModel.currentDecisionNumber)/\(BrainShiftViewModel.totalRounds)")
                     .font(DesignSystem.roundedFont(size: 15, weight: .semibold))
                     .foregroundColor(.white)
             }
-            ProgressBar(fraction: viewModel.timeRemainingFraction)
+            ProgressBar(fraction: viewModel.phase == .memorize ? 1.0 : viewModel.timeRemainingFraction)
         }
         .padding(DesignSystem.Spacing.md)
         .background(DesignSystem.flexibilityGradient)
@@ -69,12 +69,13 @@ struct BrainShiftView: View {
         .padding(.horizontal, DesignSystem.Spacing.md)
     }
 
-    // MARK: Rule banner
+    // MARK: Instruction banner
 
-    private var ruleBanner: some View {
-        Text(viewModel.currentRule.label)
+    private var instructionBanner: some View {
+        Text(viewModel.phase == .memorize ? "Remember this symbol" : "Does this match the previous symbol?")
             .font(DesignSystem.headline)
             .foregroundColor(.white)
+            .multilineTextAlignment(.center)
             .padding(.horizontal, DesignSystem.Spacing.lg)
             .padding(.vertical, DesignSystem.Spacing.xs)
             .background(DesignSystem.flexibilityGradient.opacity(0.7))
@@ -88,22 +89,12 @@ struct BrainShiftView: View {
             .fill(DesignSystem.backgroundOnboarding.opacity(0.06))
             .frame(width: 160, height: 160)
             .overlay {
-                itemShape
-                    .fill(itemColor)
+                Image(systemName: viewModel.currentSymbol.systemImageName)
+                    .resizable()
+                    .scaledToFit()
+                    .foregroundColor(viewModel.currentSymbol.color)
                     .frame(width: 90, height: 90)
             }
-    }
-
-    private var itemColor: Color {
-        viewModel.currentItem.color == .red ? Color(hex: "#F857A6") : Color(hex: "#4A7BFF")
-    }
-
-    private var itemShape: AnyShape {
-        if viewModel.currentItem.shape == .circle {
-            AnyShape(Circle())
-        } else {
-            AnyShape(RoundedRectangle(cornerRadius: 12))
-        }
     }
 
     @ViewBuilder
@@ -118,57 +109,30 @@ struct BrainShiftView: View {
         }
     }
 
-    // MARK: Buckets
+    // MARK: Answer buttons
 
-    private var buckets: some View {
+    private var answerButtons: some View {
         HStack(spacing: DesignSystem.Spacing.md) {
-            bucketButton(bucket: .left)
-            bucketButton(bucket: .right)
+            answerButton(isMatch: false, label: "NO")
+            answerButton(isMatch: true, label: "YES")
         }
         .padding(.horizontal, DesignSystem.Spacing.md)
         .disabled(viewModel.phase != .playing)
     }
 
-    private func bucketButton(bucket: BrainShiftViewModel.Bucket) -> some View {
+    private func answerButton(isMatch: Bool, label: String) -> some View {
         Button {
-            viewModel.chooseBucket(bucket)
+            viewModel.answer(isMatch: isMatch)
         } label: {
-            VStack(spacing: DesignSystem.Spacing.xxs) {
-                bucketIcon(for: bucket)
-                    .frame(width: 32, height: 32)
-                Text(bucketLabel(for: bucket))
-                    .font(DesignSystem.subheadline)
-                    .foregroundColor(.white)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, DesignSystem.Spacing.md)
+            Text(label)
+                .font(DesignSystem.buttonLabel)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, DesignSystem.Spacing.md)
         }
         .buttonStyle(.plain)
         .background(DesignSystem.flexibilityGradient)
         .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact))
-    }
-
-    private func bucketLabel(for bucket: BrainShiftViewModel.Bucket) -> String {
-        switch (viewModel.currentRule, bucket) {
-        case (.color, .left): return "Red"
-        case (.color, .right): return "Blue"
-        case (.shape, .left): return "Circle"
-        case (.shape, .right): return "Square"
-        }
-    }
-
-    @ViewBuilder
-    private func bucketIcon(for bucket: BrainShiftViewModel.Bucket) -> some View {
-        switch (viewModel.currentRule, bucket) {
-        case (.color, .left):
-            Circle().fill(Color(hex: "#F857A6"))
-        case (.color, .right):
-            Circle().fill(Color(hex: "#4A7BFF"))
-        case (.shape, .left):
-            Circle().fill(.white)
-        case (.shape, .right):
-            RoundedRectangle(cornerRadius: 6).fill(.white)
-        }
     }
 
     // MARK: Overlays

@@ -47,7 +47,6 @@ enum GameCatalog {
             name: "Lost in Migration",
             category: .attention,
             iconName: "scope",
-            isLocked: true,
             shortDescription: "Spot the bird flying against the flock.",
             rules: [
                 "A flock of birds flies in one direction.",
@@ -55,14 +54,14 @@ enum GameCatalog {
                 "Ignore the distractors around it.",
                 "React quickly for bonus points."
             ],
-            scienceExplainer: "This game exercises selective attention — your ability to focus on one relevant detail while filtering out surrounding noise. It's the same mechanism you rely on to notice a single important sign in a cluttered scene, and it's directly trainable through repeated practice."
+            scienceExplainer: "This game exercises selective attention — your ability to focus on one relevant detail while filtering out surrounding noise. It's the same mechanism you rely on to notice a single important sign in a cluttered scene, and it's directly trainable through repeated practice.",
+            isLocked: true
         ),
         Game(
             id: "brain_shift",
             name: "Brain Shift",
             category: .flexibility,
             iconName: "arrow.left.arrow.right",
-            isLocked: true,
             shortDescription: "Switch rules on the fly without slipping up.",
             rules: [
                 "You'll sort items by one rule, like color.",
@@ -70,14 +69,14 @@ enum GameCatalog {
                 "Watch the prompt closely and adapt fast.",
                 "Slipping back to the old rule costs you points."
             ],
-            scienceExplainer: "Brain Shift builds cognitive flexibility — the capacity to switch between mental rules or tasks smoothly. This is governed largely by the prefrontal cortex and underlies real-world skills like multitasking and adapting quickly when a plan suddenly changes."
+            scienceExplainer: "Brain Shift builds cognitive flexibility — the capacity to switch between mental rules or tasks smoothly. This is governed largely by the prefrontal cortex and underlies real-world skills like multitasking and adapting quickly when a plan suddenly changes.",
+            isLocked: true
         ),
         Game(
             id: "pirate_passage",
             name: "Pirate Passage",
             category: .problemSolving,
             iconName: "map.fill",
-            isLocked: true,
             shortDescription: "Plan a route through shifting obstacles.",
             rules: [
                 "Guide the ship from start to the treasure.",
@@ -85,14 +84,14 @@ enum GameCatalog {
                 "Fewer moves earns a better score.",
                 "Think a few steps ahead before moving."
             ],
-            scienceExplainer: "Pirate Passage strengthens planning and problem-solving — mapping out several moves ahead before acting. This kind of forward-thinking relies on executive function circuits that also support everyday decisions like budgeting time or navigating a new route."
+            scienceExplainer: "Pirate Passage strengthens planning and problem-solving — mapping out several moves ahead before acting. This kind of forward-thinking relies on executive function circuits that also support everyday decisions like budgeting time or navigating a new route.",
+            isLocked: true
         ),
             Game(
             id: "splitting_seeds",
             name: "Splitting Seeds",
             category: .math,
             iconName: "divide.circle.fill",
-            isLocked: true,
             shortDescription: "Split totals quickly under time pressure.",
             rules: [
                 "A total number of seeds appears on screen.",
@@ -100,7 +99,8 @@ enum GameCatalog {
                 "Answer as many rounds as you can before time's up.",
                 "Wrong splits reset your streak."
             ],
-            scienceExplainer: "Splitting Seeds keeps numerical reasoning sharp by asking you to manipulate quantities quickly and accurately. Mental arithmetic under time pressure engages working memory alongside number sense, both of which are strongly tied to everyday tasks like budgeting or estimating."
+            scienceExplainer: "Splitting Seeds keeps numerical reasoning sharp by asking you to manipulate quantities quickly and accurately. Mental arithmetic under time pressure engages working memory alongside number sense, both of which are strongly tied to everyday tasks like budgeting or estimating.",
+            isLocked: true
         ),
     ]
 }

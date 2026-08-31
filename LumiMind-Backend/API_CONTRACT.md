@@ -53,6 +53,11 @@ in `GameResult.swift` (`GameCategory.categoryScoresKey`) and mirrored in
 {
   "_id": "665f1a2b3c4d5e6f7a8b9c0d",
   "email": "user@example.com",
+  "fullName": "Jane Doe",
+  "username": "janedoe",
+  "dateOfBirth": "2000-04-12T00:00:00.000Z",
+  "country": "IN",
+  "marketingConsent": false,
   "goals": ["Improve focus", "Boost memory"],
   "difficultyLevel": "Intermediate",
   "categoryScores": {
@@ -106,7 +111,15 @@ that `gameName` maps to.
 - **Auth:** none
 - **Body:**
   ```json
-  { "email": "user@example.com", "password": "hunter2" }
+    {
+    "fullName": "Jane Doe",
+    "email": "user@example.com",
+    "password": "hunter2",
+    "username": "janedoe",
+    "dateOfBirth": "2000-04-12T00:00:00.000Z",
+    "country": "IN",
+    "marketingConsent": false
+  }
   ```
 - **Response `201`:**
   ```json

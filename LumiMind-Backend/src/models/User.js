@@ -38,6 +38,31 @@ const userSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
+    fullName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    username: {
+      type: String,
+      unique: true,
+      sparse: true,
+      trim: true,
+      default: undefined,
+    },
+    dateOfBirth: {
+      type: Date,
+      default: undefined,
+    },
+    country: {
+      type: String,
+      trim: true,
+      default: undefined,
+    },
+    marketingConsent: {
+      type: Boolean,
+      default: false,
+    },
     passwordHash: {
       type: String,
       required: true,

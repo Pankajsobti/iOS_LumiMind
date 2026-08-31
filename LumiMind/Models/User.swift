@@ -16,6 +16,11 @@ import Foundation
 struct User: Codable, Identifiable, Equatable {
     let id: String
     let email: String
+    let fullName: String
+    var username: String?
+    var dateOfBirth: Date?
+    var country: String?
+    var marketingConsent: Bool
 
     /// Set via `PATCH /users/onboarding`. Nil/absent until the user
     /// completes onboarding.
@@ -35,6 +40,11 @@ struct User: Codable, Identifiable, Equatable {
     enum CodingKeys: String, CodingKey {
         case id = "_id"
         case email
+        case fullName
+        case username
+        case dateOfBirth
+        case country
+        case marketingConsent
         case goals
         case difficultyLevel
         case categoryScores

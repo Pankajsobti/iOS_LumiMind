@@ -12,10 +12,22 @@ import Foundation
 
 // MARK: - Auth
 
-/// Body for `POST /auth/signup` and `POST /auth/login`.
+/// Body for `POST /auth/login`.
 struct AuthRequest: Codable {
     let email: String
     let password: String
+}
+
+/// Body for `POST /auth/signup`. `confirmPassword` and terms/privacy
+/// agreement are validated client-side and never sent.
+struct SignupRequest: Codable {
+    let fullName: String
+    let email: String
+    let password: String
+    let username: String?
+    let dateOfBirth: Date?
+    let country: String?
+    let marketingConsent: Bool
 }
 
 /// Response for `POST /auth/signup` and `POST /auth/login`.

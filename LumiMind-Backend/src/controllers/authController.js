@@ -25,10 +25,10 @@ function sendError(res, status, message) {
 
 export async function signup(req, res) {
   try {
-    const { email, password } = req.body ?? {};
+    const { fullName, email, password, username, dateOfBirth, country, marketingConsent } = req.body ?? {};
 
-    if (!email || !password) {
-      return sendError(res, 400, 'Email and password are required.');
+    if (!fullName || !email || !password) {
+      return sendError(res, 400, 'Full name, email, and password are required.');
     }
 
     const normalizedEmail = String(email).toLowerCase().trim();
@@ -38,8 +38,23 @@ export async function signup(req, res) {
       return sendError(res, 409, 'An account with this email already exists.');
     }
 
+        if (username) {
+      const usernameTaken = await User.findOne({ username });
+      if (usernameTaken) {
+        return sendError(res, 409, 'This username is already taken.');
+      }
+    }
+
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
-    const user = await User.create({ email: normalizedEmail, passwordHash });
+    const user = await User.create({
+      fullName: String(fullName).trim(),
+      email: normalizedEmail,
+      passwordHash,
+      username: username || undefined,
+      dateOfBirth: dateOfBirth || undefined,
+      country: country || undefined,
+      marketingConsent: Boolean(marketingConsent),
+    });
 
     const token = signToken(user._id.toString());
 

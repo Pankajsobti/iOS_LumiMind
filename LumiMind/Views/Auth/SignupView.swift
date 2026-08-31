@@ -1,47 +1,40 @@
 import SwiftUI
 
 // MARK: - SignupView
-//
-// Reached from SocialProofView's "Continue" CTA. Unlike LoginView, a
-// successful signup here also submits the onboarding answers collected
-// earlier in QuestionnaireFlowView, then proceeds to the Fit Test intro
-// (backlog #11) — new users go through onboarding once; returning users
-// (LoginView) skip straight to the main app.
-//
-// This view does NOT know about QuestionnaireFlowView's raw
-// `[String: Set<String>]` answer dictionary or its placeholder question
-// IDs — that mapping is the caller's responsibility (RootView, once
-// wired up), so this component stays reusable even if question IDs
-// change later (e.g. backlog #13 difficulty selection). It only needs
-// the two already-resolved values `submitOnboarding` expects.
 
 struct SignupView: View {
     @ObservedObject var authViewModel: AuthViewModel
 
-    /// Pre-extracted from the onboarding questionnaire answers by the
-    /// caller. Passed straight through to `submitOnboarding` after
-    /// signup succeeds.
     let goals: [String]
     let difficultyLevel: String
 
-    /// Called once signup AND the onboarding submission have both
-    /// completed. RootView is expected to route to the Fit Test intro.
     var onSignupComplete: () -> Void
-
-    /// Lets the user back out to SocialProofView / questionnaire.
     var onCancel: () -> Void
 
+    // Required
+    @State private var fullName = ""
     @State private var email = ""
     @State private var password = ""
+    @State private var confirmPassword = ""
+    @State private var agreedToTerms = false
+    @State private var agreedToPrivacy = false
 
-    /// True once signup succeeded and we're submitting onboarding
-    /// answers — kept distinct from `authViewModel.isLoading` so the
-    /// button shows a spinner through both network calls, not just
-    /// the first.
+    // Optional
+    @State private var username = ""
+    @State private var dateOfBirth = Date()
+    @State private var includeDateOfBirth = false
+    @State private var country = ""
+    @State private var marketingConsent = false
+
     @State private var isSubmittingOnboarding = false
 
     private var isFormValid: Bool {
-        !email.isEmpty && email.contains("@") && !password.isEmpty
+        !fullName.trimmingCharacters(in: .whitespaces).isEmpty
+        && !email.isEmpty && email.contains("@")
+        && !password.isEmpty
+        && password == confirmPassword
+        && agreedToTerms
+        && agreedToPrivacy
     }
 
     private var isBusy: Bool {
@@ -53,33 +46,36 @@ struct SignupView: View {
             DesignSystem.backgroundOnboarding
                 .ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                header
-                    .padding(.top, DesignSystem.Spacing.xxl)
-                    .padding(.bottom, DesignSystem.Spacing.xl)
+            ScrollView {
+                VStack(spacing: 0) {
+                    header
+                        .padding(.top, DesignSystem.Spacing.xxl)
+                        .padding(.bottom, DesignSystem.Spacing.xl)
 
-                fields
+                    requiredFields
+                    optionalFields
+                        .padding(.top, DesignSystem.Spacing.lg)
 
-                if let errorMessage = authViewModel.errorMessage {
-                    errorBanner(errorMessage)
-                        .padding(.top, DesignSystem.Spacing.md)
+                    if let errorMessage = authViewModel.errorMessage {
+                        errorBanner(errorMessage)
+                            .padding(.top, DesignSystem.Spacing.md)
+                    }
+
+                    submitButton
+                        .padding(.top, DesignSystem.Spacing.xl)
+                        .padding(.bottom, DesignSystem.Spacing.sm)
+
+                    Button(action: onCancel) {
+                        Text("Back")
+                            .font(DesignSystem.body)
+                            .foregroundColor(DesignSystem.backgroundMain.opacity(0.7))
+                            .padding(.vertical, DesignSystem.Spacing.sm)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.bottom, DesignSystem.Spacing.lg)
                 }
-
-                Spacer()
-
-                submitButton
-                    .padding(.bottom, DesignSystem.Spacing.sm)
-
-                Button(action: onCancel) {
-                    Text("Back")
-                        .font(DesignSystem.body)
-                        .foregroundColor(DesignSystem.backgroundMain.opacity(0.7))
-                        .padding(.vertical, DesignSystem.Spacing.sm)
-                }
-                .buttonStyle(.plain)
-                .padding(.bottom, DesignSystem.Spacing.lg)
+                .padding(.horizontal, DesignSystem.Spacing.lg)
             }
-            .padding(.horizontal, DesignSystem.Spacing.lg)
         }
     }
 
@@ -97,10 +93,15 @@ struct SignupView: View {
         }
     }
 
-    // MARK: Fields
+    // MARK: Required fields
 
-    private var fields: some View {
+    private var requiredFields: some View {
         VStack(spacing: DesignSystem.Spacing.md) {
+            AuthTextField(
+                placeholder: "Full Name",
+                text: $fullName,
+                textContentType: .name
+            )
             AuthTextField(
                 placeholder: "Email",
                 text: $email,
@@ -113,6 +114,95 @@ struct SignupView: View {
                 isSecure: true,
                 textContentType: .newPassword
             )
+            AuthTextField(
+                placeholder: "Confirm Password",
+                text: $confirmPassword,
+                isSecure: true,
+                textContentType: .newPassword
+            )
+
+            if !confirmPassword.isEmpty && password != confirmPassword {
+                Text("Passwords don't match")
+                    .font(DesignSystem.caption)
+                    .foregroundColor(Color(hex: "#FF6B4A"))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            consentToggle(
+                isOn: $agreedToTerms,
+                label: "I agree to the Terms of Service"
+            )
+            consentToggle(
+                isOn: $agreedToPrivacy,
+                label: "I agree to the Privacy Policy"
+            )
+        }
+    }
+
+    // MARK: Optional fields
+
+    private var optionalFields: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+            Text("Optional")
+                .font(DesignSystem.caption)
+                .foregroundColor(DesignSystem.backgroundMain.opacity(0.5))
+
+            AuthTextField(
+                placeholder: "Username",
+                text: $username,
+                textContentType: .username
+            )
+
+            Toggle(isOn: $includeDateOfBirth) {
+                Text("Add Date of Birth")
+                    .font(DesignSystem.body)
+                    .foregroundColor(DesignSystem.backgroundMain)
+            }
+            .tint(Color(hex: "#6D5DE7"))
+
+            if includeDateOfBirth {
+                DatePicker(
+                    "Date of Birth",
+                    selection: $dateOfBirth,
+                    displayedComponents: .date
+                )
+                .datePickerStyle(.compact)
+                .labelsHidden()
+                .colorScheme(.dark)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            AuthTextField(
+                placeholder: "Country / Region",
+                text: $country,
+                textContentType: .countryName
+            )
+
+            consentToggle(
+                isOn: $marketingConsent,
+                label: "Send me tips, updates, and offers"
+            )
+        }
+    }
+
+    private func consentToggle(isOn: Binding<Bool>, label: String) -> some View {
+        HStack(alignment: .top, spacing: DesignSystem.Spacing.sm) {
+            Button(action: { isOn.wrappedValue.toggle() }) {
+                Image(systemName: isOn.wrappedValue ? "checkmark.square.fill" : "square")
+                    .foregroundStyle(
+                        isOn.wrappedValue
+                            ? AnyShapeStyle(DesignSystem.primaryGradient)
+                            : AnyShapeStyle(DesignSystem.backgroundMain.opacity(0.4))
+                    )
+                    .font(.system(size: 20))
+            }
+            .buttonStyle(.plain)
+
+            Text(label)
+                .font(DesignSystem.subheadline)
+                .foregroundColor(DesignSystem.backgroundMain.opacity(0.85))
+
+            Spacer()
         }
     }
 
@@ -158,18 +248,22 @@ struct SignupView: View {
 
     private func handleSignup() {
         Task {
-            await authViewModel.signup(email: email, password: password)
+            await authViewModel.signup(
+                fullName: fullName.trimmingCharacters(in: .whitespaces),
+                email: email,
+                password: password,
+                username: username.isEmpty ? nil : username,
+                dateOfBirth: includeDateOfBirth ? dateOfBirth : nil,
+                country: country.isEmpty ? nil : country,
+                marketingConsent: marketingConsent
+            )
 
-            // Only proceed to submit onboarding answers if signup actually
-            // succeeded (e.g. not a 409 duplicate-email failure).
             guard authViewModel.isAuthenticated else { return }
 
             isSubmittingOnboarding = true
             await authViewModel.submitOnboarding(goals: goals, difficultyLevel: difficultyLevel)
             isSubmittingOnboarding = false
 
-            // submitOnboarding surfaces its own failure via errorMessage;
-            // only advance if it didn't set one.
             if authViewModel.errorMessage == nil {
                 onSignupComplete()
             }
@@ -184,7 +278,7 @@ struct SignupView: View {
         authViewModel: AuthViewModel(),
         goals: ["focus", "memory"],
         difficultyLevel: "10min",
-        onSignupComplete: { print("Signup + onboarding complete — route to Fit Test intro") },
+        onSignupComplete: { print("Signup + onboarding complete") },
         onCancel: { print("Back to SocialProof") }
     )
 }

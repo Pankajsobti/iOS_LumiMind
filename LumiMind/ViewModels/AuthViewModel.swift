@@ -32,8 +32,42 @@ final class AuthViewModel: ObservableObject {
 
     // MARK: - Signup / Login
 
-    func signup(email: String, password: String) async {
-        await performAuthRequest(endpoint: .signup, email: email, password: password)
+    func signup(
+        fullName: String,
+        email: String,
+        password: String,
+        username: String? = nil,
+        dateOfBirth: Date? = nil,
+        country: String? = nil,
+        marketingConsent: Bool = false
+    ) async {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+
+        do {
+            let body = SignupRequest(
+                fullName: fullName,
+                email: email,
+                password: password,
+                username: username,
+                dateOfBirth: dateOfBirth,
+                country: country,
+                marketingConsent: marketingConsent
+            )
+            let response: AuthResponse = try await apiClient.request(
+                endpoint: .signup,
+                method: .post,
+                body: body,
+                requiresAuth: false
+            )
+            keychain.saveToken(response.token)
+            currentUser = response.user
+            isAuthenticated = true
+        } catch {
+            errorMessage = Self.message(for: error)
+            isAuthenticated = false
+        }
     }
 
     func login(email: String, password: String) async {

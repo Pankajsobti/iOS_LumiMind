@@ -3,8 +3,7 @@
 //
 // Entry point. Run with `node server.js`.
 //
-import dotenv from 'dotenv';
-dotenv.config();
+
 import { env } from './src/config/env.js';
 import { connectDB } from './src/config/db.js';
 import app from './app.js';

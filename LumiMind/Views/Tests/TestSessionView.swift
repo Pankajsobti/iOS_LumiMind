@@ -7,11 +7,13 @@ import SwiftUI
 // instruction screen, its live interaction, and the brief transition
 // beat, per TestSessionViewModel's `phase`.
 
+typealias TestSessionCompletion = (Int, [SubtestResult]) -> Void
+
 struct TestSessionView: View {
     @StateObject private var viewModel: TestSessionViewModel
-        let onSessionFinished: (Int, [SubtestResult]) -> Void
+    let onSessionFinished: TestSessionCompletion
 
-    init(gameResultViewModel: GameResultViewModel, onSessionFinished: @escaping (Int) -> Void) {
+    init(gameResultViewModel: GameResultViewModel, onSessionFinished: @escaping TestSessionCompletion) {
         _viewModel = StateObject(wrappedValue: TestSessionViewModel(gameResultViewModel: gameResultViewModel))
         self.onSessionFinished = onSessionFinished
     }

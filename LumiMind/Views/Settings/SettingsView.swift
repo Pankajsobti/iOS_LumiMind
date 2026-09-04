@@ -187,7 +187,9 @@ struct SettingsView: View {
                 .font(DesignSystem.headline)
                 .foregroundColor(DesignSystem.backgroundOnboarding)
 
-            Link(destination: URL(string: "https://lumimind.app/help")!) {
+            NavigationLink {
+                HelpdeskView()
+            } label: {
                 Text("Visit our helpdesk")
                     .font(DesignSystem.buttonLabel)
                     .foregroundColor(.white)
@@ -198,9 +200,17 @@ struct SettingsView: View {
             .clipShape(Capsule())
 
             settingsCard {
-                legalLink(title: "Privacy Policy", url: "https://lumimind.app/privacy")
+                NavigationLink {
+                    SettingsInfoView(title: "Privacy Policy", body: SettingsLegalContent.privacyPolicy)
+                } label: {
+                    legalRow(title: "Privacy Policy")
+                }
                 Divider()
-                legalLink(title: "Terms of Service", url: "https://lumimind.app/terms")
+                NavigationLink {
+                    SettingsInfoView(title: "Terms of Service", body: SettingsLegalContent.termsOfService)
+                } label: {
+                    legalRow(title: "Terms of Service")
+                }
             }
 
             Text("App version 1.0.0")
@@ -210,17 +220,15 @@ struct SettingsView: View {
         }
     }
 
-    private func legalLink(title: String, url: String) -> some View {
-        Link(destination: URL(string: url)!) {
-            HStack {
-                Text(title)
-                    .font(DesignSystem.body)
-                    .foregroundColor(DesignSystem.backgroundOnboarding)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(DesignSystem.backgroundOnboarding.opacity(0.3))
-            }
+    private func legalRow(title: String) -> some View {
+        HStack {
+            Text(title)
+                .font(DesignSystem.body)
+                .foregroundColor(DesignSystem.backgroundOnboarding)
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(DesignSystem.backgroundOnboarding.opacity(0.3))
         }
     }
 

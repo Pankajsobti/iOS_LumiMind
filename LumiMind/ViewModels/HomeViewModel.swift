@@ -62,8 +62,14 @@ final class HomeViewModel: ObservableObject {
 
     let totalWorkouts = 30
 
+    var displayName: String {
+        authViewModel.currentUser?.fullName ?? "there"
+    }
+
+    /// 5 of the 6 games, chosen deterministically per user per day.
     var todaysExercises: [GameCatalog.Game] {
-        GameCatalog.games
+        let userID = authViewModel.currentUser?.id ?? "guest"
+        return DailySeededRandom.pick(5, from: GameCatalog.games, userID: userID)
     }
 
     func isPlayable(_ game: GameCatalog.Game) -> Bool {

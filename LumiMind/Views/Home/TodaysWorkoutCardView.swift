@@ -79,33 +79,20 @@ struct TodaysWorkoutCardView: View {
                 .foregroundColor(DesignSystem.backgroundOnboarding)
 
             ForEach(exercises) { game in
-                let playable = isPlayable(game)
                 Button { onSelectExercise(game) } label: {
                     HStack(spacing: DesignSystem.Spacing.sm) {
-                        ZStack(alignment: .bottomTrailing) {
-                            Circle()
-                                .fill(game.category.gradient)
-                                .frame(width: 44, height: 44)
-                                .overlay(Image(systemName: game.iconName).foregroundColor(.white))
-                                .opacity(playable ? 1 : 0.5)
-
-                            if !playable {
-                                Image(systemName: "lock.fill")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .padding(4)
-                                    .background(DesignSystem.backgroundOnboarding.opacity(0.7))
-                                    .clipShape(Circle())
-                            }
-                        }
+                        Circle()
+                            .fill(game.category.gradient)
+                            .frame(width: 44, height: 44)
+                            .overlay(Image(systemName: game.iconName).foregroundColor(.white))
 
                         VStack(alignment: .leading, spacing: 0) {
                             Text(game.name)
                                 .font(DesignSystem.headline)
-                                .foregroundColor(playable ? DesignSystem.backgroundOnboarding : DesignSystem.backgroundOnboarding.opacity(0.4))
+                                .foregroundColor(DesignSystem.backgroundOnboarding)
                             Text(game.category.rawValue.uppercased())
                                 .font(DesignSystem.caption)
-                                .foregroundColor(DesignSystem.backgroundOnboarding.opacity(playable ? 0.5 : 0.3))
+                                .foregroundColor(DesignSystem.backgroundOnboarding.opacity(0.5))
                         }
 
                         Spacer()

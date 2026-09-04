@@ -20,7 +20,8 @@ struct HomeView: View {
         case comingSoon(String)
     }
 
-    @State private var path: [Route] = []
+        @State private var path: [Route] = []
+        @State private var showSettings = false
 
     init(authViewModel: AuthViewModel, gameResultViewModel: GameResultViewModel) {
         self.authViewModel = authViewModel
@@ -41,6 +42,17 @@ struct HomeView: View {
                 }
             }
             .navigationTitle("Today")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button { showSettings = true } label: {
+                        Image(systemName: "gearshape.fill")
+                            .foregroundColor(DesignSystem.backgroundOnboarding)
+                    }
+                }
+            }
+            .sheet(isPresented: $showSettings) {
+                SettingsView(authViewModel: authViewModel)
+            }
             .navigationDestination(for: Route.self) { route in
                 switch route {
                 case .memoryMatrix:
@@ -74,6 +86,10 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.xl) {
                 streakRow
                     .padding(.top, DesignSystem.Spacing.md)
+
+                Text("Hi, \(viewModel.displayName)")
+                    .font(DesignSystem.title)
+                    .foregroundColor(DesignSystem.backgroundOnboarding)
 
                 TodaysWorkoutCardView(
                     workoutNumber: viewModel.workoutNumber,

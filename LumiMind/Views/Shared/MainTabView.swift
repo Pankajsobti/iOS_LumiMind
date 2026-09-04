@@ -16,6 +16,8 @@ import SwiftUI
 struct MainTabView: View {
     @ObservedObject var authViewModel: AuthViewModel
     @StateObject private var gameResultViewModel = GameResultViewModel()
+    @State private var testSessionPath: [String] = []
+    @State private var testSessionResults: (score: Int, results: [SubtestResult])?
 
     var body: some View {
         TabView {
@@ -39,7 +41,33 @@ struct MainTabView: View {
                     Label(TabItem.discover.rawValue, systemImage: "sparkles")
                 }
 
-            ComingSoonTabView(tab: .tests)
+               NavigationStack {
+                CognitiveTestIntroView(
+                    onStart: { testSessionPath.append("session") },
+                    onViewHistory: { testSessionPath.append("history") },
+                    latestScore: testSessionResults?.score
+                )
+                                .navigationDestination(for: String.self) { destination in
+                    switch destination {
+                    case "session":
+                        TestSessionView(gameResultViewModel: gameResultViewModel) { finalScore, results in
+                            testSessionResults = (finalScore, results)
+                            testSessionPath.append("results")
+                        }
+                    case "history":
+                        TestHistoryView(gameResultViewModel: gameResultViewModel)
+                    default:
+                        if let testSessionResults {
+                            TestResultsView(
+                                grandIndexScore: testSessionResults.score,
+                                results: testSessionResults.results,
+                                onDone: { testSessionPath.removeLast(testSessionPath.count) }
+                            )
+                        }
+                    }
+                }
+                
+            }
                 .tabItem {
                     Label(TabItem.tests.rawValue, systemImage: "checklist")
                 }

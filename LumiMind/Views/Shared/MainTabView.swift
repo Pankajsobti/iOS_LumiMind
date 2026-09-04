@@ -41,7 +41,7 @@ struct MainTabView: View {
                     Label(TabItem.discover.rawValue, systemImage: "sparkles")
                 }
 
-               NavigationStack {
+               NavigationStack(path: $testSessionPath) {
                 CognitiveTestIntroView(
                     onStart: { testSessionPath.append("session") },
                     onViewHistory: { testSessionPath.append("history") },

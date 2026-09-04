@@ -33,8 +33,8 @@ struct TestSessionView: View {
             }
         }
         .navigationBarBackButtonHidden(true)
-        .onChange(of: viewModel.phase) { phase in
-            if case .finished(let score) = phase {
+        .onChange(of: viewModel.phase) { _, newPhase in
+            if case .finished(let score) = newPhase {
                 onSessionFinished(score, viewModel.results)
             }
         }

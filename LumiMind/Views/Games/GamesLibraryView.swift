@@ -103,6 +103,8 @@ struct GamesLibraryView: View {
             PiratePassageDestination(gameResultViewModel: gameResultViewModel, game: game, popToRoot: { path = NavigationPath() })
         case "splitting_seeds":
             SplittingSeedsDestination(gameResultViewModel: gameResultViewModel, game: game, popToRoot: { path = NavigationPath() })
+        case "train_of_thought":
+            TrainOfThoughtDestination(gameResultViewModel: gameResultViewModel, game: game, popToRoot: { path = NavigationPath() })    
         default:
             ComingSoonView(gameName: game.name, category: game.category)
         }
@@ -267,6 +269,20 @@ private struct SplittingSeedsDestination: View {
 
     var body: some View {
         SplittingSeedsView(gameResultViewModel: gameResultViewModel, isFitTest: false, onComplete: { showScienceExplainer = true })
+            .navigationDestination(isPresented: $showScienceExplainer) {
+                ScienceExplainerView(game: game, score: gameResultViewModel.results.first?.score, onContinue: popToRoot)
+            }
+    }
+}
+
+private struct TrainOfThoughtDestination: View {
+    @ObservedObject var gameResultViewModel: GameResultViewModel
+    let game: GameCatalog.Game
+    let popToRoot: () -> Void
+    @State private var showScienceExplainer = false
+
+    var body: some View {
+        TrainOfThoughtView(gameResultViewModel: gameResultViewModel, isFitTest: false, onComplete: { showScienceExplainer = true })
             .navigationDestination(isPresented: $showScienceExplainer) {
                 ScienceExplainerView(game: game, score: gameResultViewModel.results.first?.score, onContinue: popToRoot)
             }

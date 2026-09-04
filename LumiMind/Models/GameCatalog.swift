@@ -109,6 +109,22 @@ enum GameCatalog {
             scienceExplainer: "Splitting Seeds keeps numerical reasoning sharp by asking you to manipulate quantities quickly and accurately. Mental arithmetic under time pressure engages working memory alongside number sense, both of which are strongly tied to everyday tasks like budgeting or estimating.",
             isLocked: true
         ),
+
+        Game(
+            id: "train_of_thought",
+            name: "Train of Thought",
+            category: .attention,
+            iconName: "tram.fill",
+            shortDescription: "Route trains to their matching stations.",
+            rules: [
+                "Trains enter and travel the tracks automatically.",
+                "Tap a switch to send the next train down the right branch.",
+                "Match each train's color to its station.",
+                "Wrong stations and crashes cost points."
+            ],
+            scienceExplainer: "Train of Thought trains divided attention — tracking several independent moving objects at once and acting on the right one at the right time. This is the same skill you use merging into traffic while watching multiple cars, and it's directly trainable through repeated practice.",
+            isLocked: true
+        ),
     ]
 }
 

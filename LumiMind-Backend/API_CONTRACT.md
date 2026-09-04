@@ -227,3 +227,8 @@ Route handlers, controllers, JWT middleware implementation, password
 hashing implementation, and validation logic are **not** defined here —
 this document fixes shapes and paths only. Implementation is left to
 future build prompts.
+
+
+### Train of Thought
+ gameName: "Train of Thought"
+ category: "Attention"

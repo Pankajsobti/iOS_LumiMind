@@ -26,7 +26,7 @@ struct SettingsInfoView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    var body: some View { body_ }
+    // var body: some View { body_ }
 }
 
 // MARK: - Helpdesk (contact, not just static text)

@@ -1,4 +1,5 @@
 import SwiftUI
+import Foundation
 
 // MARK: - TestResultsView
 //
@@ -22,7 +23,7 @@ struct TestResultsView: View {
         // percentile for display using the same normal-CDF logic.
         let z = Double(grandIndexScore - 100) / 15
         let p = (0.5 * (1 + erf(z / Double(2).squareRoot()))) * 100
-        return Int(p.rounded().clamped(1...99))
+        return Int(p.rounded().clamped(1, 99))
     }
 
     var body: some View {

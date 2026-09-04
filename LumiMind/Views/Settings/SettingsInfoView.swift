@@ -2,21 +2,20 @@
 //  SettingsInfoView.swift
 //  LumiMind
 //
-//  Generic in-app content screen used for Privacy Policy, Terms of
-//  Service, and Helpdesk/Contact — until real hosted pages exist.
-//  Swap `body` text for the real legal copy later; navigation and
-//  styling stay the same.
+//  Generic in-app content screen used for Privacy Policy and Terms of
+//  Service. Swap `content` text for real legal copy later; navigation
+//  and styling stay the same.
 //
 
 import SwiftUI
 
 struct SettingsInfoView: View {
     let title: String
-    let body: String
+    let content: String
 
-    var body_: some View {
+    var body: some View {
         ScrollView {
-            Text(body)
+            Text(content)
                 .font(DesignSystem.body)
                 .foregroundColor(DesignSystem.backgroundOnboarding.opacity(0.8))
                 .padding(DesignSystem.Spacing.lg)
@@ -25,8 +24,6 @@ struct SettingsInfoView: View {
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
     }
-
-    // var body: some View { body_ }
 }
 
 // MARK: - Helpdesk (contact, not just static text)
@@ -65,8 +62,6 @@ struct HelpdeskView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 }
-
-// MARK: - Placeholder legal copy
 
 enum SettingsLegalContent {
     static let privacyPolicy = """

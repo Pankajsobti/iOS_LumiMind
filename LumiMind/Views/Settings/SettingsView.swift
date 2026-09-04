@@ -201,13 +201,13 @@ struct SettingsView: View {
 
             settingsCard {
                 NavigationLink {
-                    SettingsInfoView(title: "Privacy Policy", body: SettingsLegalContent.privacyPolicy)
+                    SettingsInfoView(title: "Privacy Policy", content: SettingsLegalContent.privacyPolicy)
                 } label: {
                     legalRow(title: "Privacy Policy")
                 }
                 Divider()
                 NavigationLink {
-                    SettingsInfoView(title: "Terms of Service", body: SettingsLegalContent.termsOfService)
+                    SettingsInfoView(title: "Terms of Service", content: SettingsLegalContent.termsOfService)
                 } label: {
                     legalRow(title: "Terms of Service")
                 }

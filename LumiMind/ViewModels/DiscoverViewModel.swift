@@ -1,5 +1,7 @@
 import Foundation
 
+import Combine
+
 @MainActor
 final class DiscoverViewModel: ObservableObject {
     @Published var selectedCategory: DiscoverCategory?

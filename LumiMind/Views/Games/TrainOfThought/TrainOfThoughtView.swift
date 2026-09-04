@@ -99,13 +99,7 @@ struct TrainOfThoughtView: View {
     }
 
     private func stationView(_ station: TrainOfThoughtViewModel.StationState) -> some View {
-        ZStack {
-            Circle().fill(Color(hex: station.colorHex))
-                .frame(width: 34, height: 34)
-            Image(systemName: "flag.fill")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(.white)
-        }
+        StationSprite(colorHex: station.colorHex, size: 40)
     }
 
     private func switchView(_ sw: TrainOfThoughtViewModel.SwitchState) -> some View {
@@ -128,12 +122,23 @@ struct TrainOfThoughtView: View {
     private func trainView(_ train: TrainOfThoughtViewModel.TrainState) -> some View {
         let seg = TrainOfThoughtViewModel.segments[train.currentSegmentId]
         let point = seg.map { TrainOfThoughtViewModel.point(at: train.progress, on: $0.points) } ?? .zero
-        return RoundedRectangle(cornerRadius: 4)
-            .fill(Color(hex: train.colorHex))
-            .frame(width: 18, height: 12)
-            .overlay(RoundedRectangle(cornerRadius: 4).stroke(.white, lineWidth: 1.5))
+        let heading = seg.map { headingAngle(for: train.progress, on: $0.points) } ?? .zero
+        return TrainSprite(colorHex: train.colorHex, size: 26, heading: heading)
             .position(point)
             .animation(.linear(duration: 1.0 / 30.0), value: train.progress)
+    }
+
+    /// Approximates the train's facing direction by sampling a point
+    /// just ahead on its current polyline and measuring the angle
+    /// between the two — keeps the sprite visually oriented along
+    /// the track instead of always facing the same way.
+    private func headingAngle(for progress: Double, on points: [CGPoint]) -> Angle {
+        let here = TrainOfThoughtViewModel.point(at: progress, on: points)
+        let ahead = TrainOfThoughtViewModel.point(at: min(1, progress + 0.02), on: points)
+        let dx = ahead.x - here.x
+        let dy = ahead.y - here.y
+        guard dx != 0 || dy != 0 else { return .zero }
+        return Angle(radians: Double(atan2(dy, dx)))
     }
 
     @ViewBuilder

@@ -87,6 +87,16 @@ enum DesignSystem {
         endPoint: .bottomTrailing
     )
 
+
+        /// Spotlight — amber to orange. Editorial/feature highlights only
+    /// (Discover tab's "Inside LumiMind" section).
+    static let spotlightGradient = LinearGradient(
+        colors: [Color(hex: "#F5A623"), Color(hex: "#FF7A45")],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+
+
     /// Convenience lookup so category gradients can be selected dynamically.
     static func gradient(for category: GameCategory) -> LinearGradient {
         switch category {

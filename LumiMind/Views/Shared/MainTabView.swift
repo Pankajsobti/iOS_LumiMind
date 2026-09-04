@@ -34,7 +34,7 @@ struct MainTabView: View {
                      Label(TabItem.myBrain.rawValue, systemImage: "brain.head.profile")
                 }
 
-            ComingSoonTabView(tab: .discover)
+            DiscoverView()
                 .tabItem {
                     Label(TabItem.discover.rawValue, systemImage: "sparkles")
                 }

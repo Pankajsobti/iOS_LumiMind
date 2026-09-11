@@ -149,30 +149,36 @@ struct SpeedMatchView: View {
         }
     }
 
-    // MARK: Answer bar (full-width split NO / YES)
+    // MARK: Answer bar (side-by-side pill buttons)
 
     private var answerBar: some View {
-        HStack(spacing: 0) {
-            answerHalf(title: "NO") { viewModel.answer(.noMatch) }
-            Rectangle()
-                .fill(.white.opacity(0.12))
-                .frame(width: 1)
-            answerHalf(title: "YES") { viewModel.answer(.match) }
+        HStack(spacing: DesignSystem.Spacing.md) {
+            Button(action: { viewModel.answer(.noMatch) }) {
+                Text("No Match")
+                    .font(DesignSystem.buttonLabel)
+                    .foregroundColor(DesignSystem.backgroundOnboarding)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, DesignSystem.Spacing.md)
+            }
+            .buttonStyle(.plain)
+            .background(.white)
+            .clipShape(Capsule())
+
+            Button(action: { viewModel.answer(.match) }) {
+                Text("Match")
+                    .font(DesignSystem.buttonLabel)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, DesignSystem.Spacing.md)
+            }
+            .buttonStyle(.plain)
+            .background(DesignSystem.primaryGradient)
+            .clipShape(Capsule())
         }
-        .frame(height: 76)
-        .background(DesignSystem.backgroundOnboarding)
+        .padding(.horizontal, DesignSystem.Spacing.md)
+        .padding(.bottom, DesignSystem.Spacing.sm)
         .disabled(viewModel.phase != .playing)
         .opacity(viewModel.phase == .playing ? 1 : 0.5)
-    }
-
-    private func answerHalf(title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(DesignSystem.roundedFont(size: 19, weight: .bold))
-                .foregroundStyle(DesignSystem.primaryGradient)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: Overlays (unchanged)

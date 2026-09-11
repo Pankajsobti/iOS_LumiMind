@@ -46,10 +46,10 @@ struct GamesLibraryView: View {
             }
             .navigationBarHidden(true)
             .navigationDestination(for: GameCatalog.Game.self) { game in
-                GameIntroView(game: game) {
-                    destination(for: game)
-                }
-            }
+                 GameIntroView(game: game, gameResultViewModel: gameResultViewModel) {
+        destination(for: game)
+    }
+}
         }
     }
 
@@ -200,7 +200,7 @@ private struct MemoryMatrixDestination: View {
     var body: some View {
         MemoryMatrixView(gameResultViewModel: gameResultViewModel, isFitTest: false, onComplete: { showScienceExplainer = true })
             .navigationDestination(isPresented: $showScienceExplainer) {
-                ScienceExplainerView(game: game, score: gameResultViewModel.results.first?.score, onContinue: popToRoot)
+                ScienceExplainerView(game: game, score: gameResultViewModel.results.first?.score, gameResultViewModel: gameResultViewModel, onContinue: popToRoot)
             }
     }
 }
@@ -214,7 +214,7 @@ private struct SpeedMatchDestination: View {
     var body: some View {
         SpeedMatchView(gameResultViewModel: gameResultViewModel, isFitTest: false, onComplete: { showScienceExplainer = true })
             .navigationDestination(isPresented: $showScienceExplainer) {
-                ScienceExplainerView(game: game, score: gameResultViewModel.results.first?.score, onContinue: popToRoot)
+                ScienceExplainerView(game: game, score: gameResultViewModel.results.first?.score, gameResultViewModel: gameResultViewModel, onContinue: popToRoot)
             }
     }
 }
@@ -228,7 +228,7 @@ private struct LostInMigrationDestination: View {
     var body: some View {
         LostInMigrationView(gameResultViewModel: gameResultViewModel, isFitTest: false, onComplete: { showScienceExplainer = true })
             .navigationDestination(isPresented: $showScienceExplainer) {
-                ScienceExplainerView(game: game, score: gameResultViewModel.results.first?.score, onContinue: popToRoot)
+                ScienceExplainerView(game: game, score: gameResultViewModel.results.first?.score, gameResultViewModel: gameResultViewModel, onContinue: popToRoot)
             }
     }
 }
@@ -242,7 +242,7 @@ private struct BrainShiftDestination: View {
     var body: some View {
         BrainShiftView(gameResultViewModel: gameResultViewModel, isFitTest: false, onComplete: { showScienceExplainer = true })
             .navigationDestination(isPresented: $showScienceExplainer) {
-                ScienceExplainerView(game: game, score: gameResultViewModel.results.first?.score, onContinue: popToRoot)
+                ScienceExplainerView(game: game, score: gameResultViewModel.results.first?.score, gameResultViewModel: gameResultViewModel, onContinue: popToRoot)
             }
     }
 }
@@ -256,7 +256,7 @@ private struct PiratePassageDestination: View {
     var body: some View {
         PiratePassageView(gameResultViewModel: gameResultViewModel, isFitTest: false, onComplete: { showScienceExplainer = true })
             .navigationDestination(isPresented: $showScienceExplainer) {
-                ScienceExplainerView(game: game, score: gameResultViewModel.results.first?.score, onContinue: popToRoot)
+                ScienceExplainerView(game: game, score: gameResultViewModel.results.first?.score, gameResultViewModel: gameResultViewModel, onContinue: popToRoot)
             }
     }
 }
@@ -270,7 +270,7 @@ private struct SplittingSeedsDestination: View {
     var body: some View {
         SplittingSeedsView(gameResultViewModel: gameResultViewModel, isFitTest: false, onComplete: { showScienceExplainer = true })
             .navigationDestination(isPresented: $showScienceExplainer) {
-                ScienceExplainerView(game: game, score: gameResultViewModel.results.first?.score, onContinue: popToRoot)
+                ScienceExplainerView(game: game, score: gameResultViewModel.results.first?.score, gameResultViewModel: gameResultViewModel, onContinue: popToRoot)
             }
     }
 }
@@ -284,7 +284,7 @@ private struct TrainOfThoughtDestination: View {
     var body: some View {
         TrainOfThoughtView(gameResultViewModel: gameResultViewModel, isFitTest: false, onComplete: { showScienceExplainer = true })
             .navigationDestination(isPresented: $showScienceExplainer) {
-                ScienceExplainerView(game: game, score: gameResultViewModel.results.first?.score, onContinue: popToRoot)
+                ScienceExplainerView(game: game, score: gameResultViewModel.results.first?.score, gameResultViewModel: gameResultViewModel, onContinue: popToRoot)
             }
     }
 }

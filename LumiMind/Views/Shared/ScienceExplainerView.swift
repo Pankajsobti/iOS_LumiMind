@@ -2,71 +2,163 @@ import SwiftUI
 
 // MARK: - ScienceExplainerView
 //
-// Reusable post-game screen shown after any game submits its result.
-// Explains the cognitive science behind the game, then shows the
-// score. Score is folded into this screen rather than a separate
-// GameScoreView (scope decision — no dedicated score/history screen
-// exists yet). Falls back to a placeholder if score is nil so a
-// submission failure/race never crashes this screen.
+// Post-game screen. Shows the score, a "New High Score" callout when
+// earned, and the science explainer. `gameResultViewModel` is optional
+// (default nil) so existing call sites keep compiling — pass it in to
+// enable real Past Best / New High Score / Plays Today, all computed
+// from `results` (no separate stats model needed).
 //
-// Visual pass: category shown as a tinted pill instead of plain
-// caption text, lightbulb glyph added next to "The Science", icon
-// badge gets a ring + shadow, score card gets a translucent icon
-// watermark for depth. No data flow, models, or navigation touched —
-// still renders only `game` and `score` as before.
+// NOTE: Cards/Accuracy/Response Time/Unlock/rank-trophy from the
+// Lumosity reference were left out — none have a backing data model.
+// "Play Again" currently still calls `onContinue` (same as old
+// "Continue" — returns to library). Wire a real replay callback
+// through GamesLibraryView's *Destination wrappers if you want actual
+// same-game replay instead.
 
 struct ScienceExplainerView: View {
     let game: GameCatalog.Game
     let score: Int?
+    var gameResultViewModel: GameResultViewModel? = nil
     let onContinue: () -> Void
 
+    @Environment(\.dismiss) private var dismiss
+
+    private var gameResults: [GameResult] {
+        guard let gameResultViewModel else { return [] }
+        return gameResultViewModel.results.filter { $0.gameName == game.name }
+    }
+
+    /// First entry is the just-submitted play (inserted at index 0 by
+    /// submitResult). Past best excludes it.
+    private var pastBest: Int? {
+        gameResults.dropFirst().map(\.score).max()
+    }
+
+    private var isNewHighScore: Bool {
+        guard let score, let pastBest else { return score != nil && pastBest == nil && !gameResults.isEmpty ? true : false }
+        return score > pastBest
+    }
+
+    private var playsToday: Int {
+        let calendar = Calendar.current
+        return gameResults.filter { calendar.isDateInToday($0.playedAt) }.count
+    }
+
     var body: some View {
-        ZStack {
+        ZStack(alignment: .top) {
             DesignSystem.backgroundMain.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                ScrollView {
-                    VStack(spacing: DesignSystem.Spacing.lg) {
-                        header
-                        explainerCard
-                        scoreCard
-                    }
-                    .padding(.top, DesignSystem.Spacing.lg)
-                    .padding(.bottom, DesignSystem.Spacing.md)
-                }
-
-                continueButton
+                heroHeader
+                content
             }
         }
-        .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
+        .navigationBarTitleDisplayMode(.inline)
     }
 
-    private var header: some View {
-        VStack(spacing: DesignSystem.Spacing.sm) {
-            Image(systemName: game.iconName)
-                .font(.system(size: 34, weight: .semibold))
-                .foregroundColor(.white)
-                .frame(width: 80, height: 80)
-                .background(game.category.gradient)
-                .clipShape(Circle())
-                .overlay(
-                    Circle().stroke(.white.opacity(0.5), lineWidth: 2)
-                )
-                .shadow(color: .black.opacity(0.12), radius: 12, y: 6)
+    // MARK: Hero header
 
+    private var heroHeader: some View {
+        ZStack(alignment: .topLeading) {
+            game.category.gradient
+
+            Button(action: { dismiss() }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 36, height: 36)
+                    .background(.white.opacity(0.18))
+                    .clipShape(Circle())
+            }
+            .padding(.top, DesignSystem.Spacing.sm)
+            .padding(.leading, DesignSystem.Spacing.md)
+        }
+        .frame(height: 90)
+    }
+
+    // MARK: Content
+
+    private var content: some View {
+        ScrollView {
+            VStack(spacing: DesignSystem.Spacing.lg) {
+                headline
+                scoreBanner
+                statsSection
+                explainerCard
+            }
+            .padding(.horizontal, DesignSystem.Spacing.md)
+            .padding(.top, DesignSystem.Spacing.lg)
+            .padding(.bottom, DesignSystem.Spacing.xl)
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            bottomBar
+        }
+    }
+
+    private var headline: some View {
+        VStack(spacing: DesignSystem.Spacing.xxs) {
             Text(game.category.rawValue.uppercased())
-                .font(DesignSystem.caption)
-                .foregroundColor(DesignSystem.backgroundOnboarding.opacity(0.7))
-                .padding(.horizontal, DesignSystem.Spacing.sm)
-                .padding(.vertical, DesignSystem.Spacing.xxs)
-                .background(
-                    Capsule().fill(game.category.gradient).opacity(0.15)
-                )
+                .font(DesignSystem.roundedFont(size: 13, weight: .bold))
+                .foregroundColor(DesignSystem.backgroundOnboarding.opacity(0.5))
 
-            Text(game.name)
-                .font(DesignSystem.title2)
+            Text(isNewHighScore ? "New High Score!" : "Nice Work!")
+                .font(DesignSystem.title)
                 .foregroundColor(DesignSystem.backgroundOnboarding)
+        }
+    }
+
+    private var scoreBanner: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Plays Today")
+                    .font(DesignSystem.caption)
+                    .foregroundColor(.white.opacity(0.85))
+                Text("\(playsToday)")
+                    .font(DesignSystem.roundedFont(size: 15, weight: .bold))
+                    .foregroundColor(.white)
+            }
+
+            Spacer()
+
+            Text(score.map(String.init) ?? "—")
+                .font(DesignSystem.roundedFont(size: 32, weight: .bold))
+                .foregroundColor(.white)
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("Today")
+                    .font(DesignSystem.caption)
+                    .foregroundColor(.white.opacity(0.85))
+                if isNewHighScore {
+                    Image(systemName: "trophy.fill")
+                        .font(.system(size: 15))
+                        .foregroundColor(.white)
+                }
+            }
+        }
+        .padding(DesignSystem.Spacing.md)
+        .background(game.category.gradient)
+        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius))
+    }
+
+    private var statsSection: some View {
+        VStack(spacing: DesignSystem.Spacing.md) {
+            Divider()
+            statRow(label: "Past Best", value: pastBest.map(String.init) ?? "—")
+        }
+    }
+
+    private func statRow(label: String, value: String) -> some View {
+        HStack {
+            Text(label)
+                .font(DesignSystem.headline)
+                .foregroundColor(DesignSystem.backgroundOnboarding)
+            Spacer()
+            Text(value)
+                .font(DesignSystem.body)
+                .foregroundColor(DesignSystem.backgroundOnboarding.opacity(0.7))
         }
     }
 
@@ -89,48 +181,34 @@ struct ScienceExplainerView: View {
         .padding(DesignSystem.Spacing.md)
         .background(.white)
         .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius))
-        .padding(.horizontal, DesignSystem.Spacing.md)
     }
 
-    private var scoreCard: some View {
-        ZStack {
-            Image(systemName: game.iconName)
-                .font(.system(size: 110, weight: .bold))
-                .foregroundColor(.white.opacity(0.12))
-                .rotationEffect(.degrees(-12))
-                .offset(x: 70, y: -6)
+    // MARK: Bottom bar
 
-            VStack(spacing: DesignSystem.Spacing.xxs) {
-                Text("Your Score")
-                    .font(DesignSystem.subheadline)
-                    .foregroundColor(.white.opacity(0.85))
-
-                Text(score.map(String.init) ?? "—")
-                    .font(DesignSystem.roundedFont(size: 40, weight: .bold))
-                    .foregroundColor(.white)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(DesignSystem.Spacing.md)
-        }
-        .background(game.category.gradient)
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius))
-        .padding(.horizontal, DesignSystem.Spacing.md)
-    }
-
-    private var continueButton: some View {
-        Button(action: onContinue) {
-            Text("Continue")
+    private var bottomBar: some View {
+        HStack(spacing: DesignSystem.Spacing.md) {
+            Button(action: onContinue) {
+                HStack(spacing: DesignSystem.Spacing.xxs) {
+                    Image(systemName: "arrow.left")
+                    Text("All Games")
+                }
                 .font(DesignSystem.buttonLabel)
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, DesignSystem.Spacing.md)
+                .foregroundColor(Color(hex: "#6D5DE7"))
+            }
+
+            Button(action: onContinue) {
+                Text("Play Again")
+                    .font(DesignSystem.buttonLabel)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, DesignSystem.Spacing.md)
+                    .background(DesignSystem.primaryGradient)
+                    .clipShape(Capsule())
+            }
         }
-        .buttonStyle(.plain)
-        .background(DesignSystem.primaryGradient)
-        .clipShape(Capsule())
-        .shadow(color: Color(hex: "#6D5DE7").opacity(0.35), radius: 14, y: 8)
         .padding(.horizontal, DesignSystem.Spacing.md)
-        .padding(.bottom, DesignSystem.Spacing.md)
+        .padding(.vertical, DesignSystem.Spacing.sm)
+        .background(.white)
     }
 }
 
@@ -138,6 +216,6 @@ struct ScienceExplainerView: View {
 
 #Preview {
     NavigationStack {
-        ScienceExplainerView(game: GameCatalog.games[0], score: 780, onContinue: {})
+        ScienceExplainerView(game: GameCatalog.games[0], score: 780, gameResultViewModel: GameResultViewModel(), onContinue: {})
     }
 }

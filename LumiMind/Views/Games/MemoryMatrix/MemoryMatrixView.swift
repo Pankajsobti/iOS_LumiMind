@@ -2,20 +2,21 @@ import SwiftUI
 
 // MARK: - MemoryMatrixView
 //
-// The user's first actual gameplay experience. Renders whatever
-// `MemoryMatrixViewModel` currently reports — grid, timer, phase — and
-// forwards taps into it. All gameplay/scoring/submission logic lives in
-// the ViewModel; this View is purely presentational + navigation.
+// Renders whatever `MemoryMatrixViewModel` currently reports — the grid
+// of tiles, current phase, level, and progress — and forwards taps into
+// it. All gameplay/scoring/submission logic lives in the ViewModel; this
+// View is purely presentational + navigation, same as before.
 //
-// Background switches to the cream main-app token here (first taste of
-// the main app aesthetic), unlike the navy used through onboarding and
-// FitTestIntroView. Header uses the locked Memory category gradient.
+// Background/gradient usage unchanged from the previous implementation:
+// cream `backgroundMain` for the game surface, `memoryGradient` for the
+// header and highlighted tiles, `backgroundOnboarding` for overlay
+// surfaces and the resting tile color.
 
 struct MemoryMatrixView: View {
     @StateObject private var viewModel: MemoryMatrixViewModel
 
     /// Called after the result has been submitted and the user taps
-    /// "Continue" — the caller routes to Results / 30-Day Plan (#12).
+    /// "Continue" — unchanged from the previous implementation.
     var onComplete: () -> Void
 
     init(gameResultViewModel: GameResultViewModel, isFitTest: Bool = true, onComplete: @escaping () -> Void) {
@@ -23,7 +24,9 @@ struct MemoryMatrixView: View {
         self.onComplete = onComplete
     }
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: DesignSystem.Spacing.sm), count: 4)
+    private var columns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: DesignSystem.Spacing.sm), count: viewModel.gridSize)
+    }
 
     var body: some View {
         ZStack {
@@ -42,6 +45,14 @@ struct MemoryMatrixView: View {
 
             if case .preview = viewModel.phase {
                 previewOverlay
+            }
+
+            if viewModel.roundJustCompleted {
+                successBanner
+            }
+
+            if viewModel.hasError {
+                errorBanner
             }
 
             if case .submitting = viewModel.phase {
@@ -65,13 +76,13 @@ struct MemoryMatrixView: View {
 
                 Spacer()
 
-                Label("\(viewModel.timeRemaining)s", systemImage: "timer")
+                Text("Level \(viewModel.level)")
                     .font(DesignSystem.roundedFont(size: 15, weight: .semibold))
                     .foregroundColor(.white)
             }
 
             HStack {
-                Text("\(viewModel.matchedPairs)/\(MemoryMatrixViewModel.pairCount) pairs matched")
+                Text("\(viewModel.targetsFound)/\(viewModel.targetCount) found")
                     .font(DesignSystem.subheadline)
                     .foregroundColor(.white.opacity(0.85))
                 Spacer()
@@ -87,20 +98,22 @@ struct MemoryMatrixView: View {
 
     private var grid: some View {
         LazyVGrid(columns: columns, spacing: DesignSystem.Spacing.sm) {
-            ForEach(viewModel.cards) { card in
-                CardTile(card: card) {
-                    viewModel.tap(card)
+            ForEach(viewModel.tiles) { tile in
+                TileView(tile: tile) {
+                    viewModel.tap(tile)
                 }
             }
         }
+        .allowsHitTesting(viewModel.canInteract)
+        .animation(.easeInOut(duration: 0.2), value: viewModel.gridSize)
     }
 
     // MARK: Preview overlay
 
     private var previewOverlay: some View {
-        VStack(spacing: DesignSystem.Spacing.xs) {
+        VStack {
             Spacer()
-            Text("Memorize the board!")
+            Text("Memorize the pattern!")
                 .font(DesignSystem.headline)
                 .foregroundColor(.white)
                 .padding(.horizontal, DesignSystem.Spacing.lg)
@@ -111,7 +124,42 @@ struct MemoryMatrixView: View {
         }
     }
 
+    // MARK: Transient round-outcome banners
+
+    private var successBanner: some View {
+        VStack {
+            Spacer()
+            Text("Nice! Next pattern coming up…")
+                .font(DesignSystem.headline)
+                .foregroundColor(.white)
+                .padding(.horizontal, DesignSystem.Spacing.lg)
+                .padding(.vertical, DesignSystem.Spacing.sm)
+                .background(DesignSystem.memoryGradient)
+                .clipShape(Capsule())
+                .padding(.bottom, DesignSystem.Spacing.xxl)
+        }
+        .transition(.opacity)
+        .animation(.easeInOut(duration: 0.25), value: viewModel.roundJustCompleted)
+    }
+
+    private var errorBanner: some View {
+        VStack {
+            Spacer()
+            Text("Not quite — that spot wasn't highlighted")
+                .font(DesignSystem.headline)
+                .foregroundColor(.white)
+                .padding(.horizontal, DesignSystem.Spacing.lg)
+                .padding(.vertical, DesignSystem.Spacing.sm)
+                .background(Color(hex: "#FF6B4A"))
+                .clipShape(Capsule())
+                .padding(.bottom, DesignSystem.Spacing.xxl)
+        }
+        .transition(.opacity)
+        .animation(.easeInOut(duration: 0.25), value: viewModel.hasError)
+    }
+
     // MARK: Submitting / finished overlays
+    // Unchanged from the previous implementation.
 
     private func statusOverlay(message: String, showsSpinner: Bool) -> some View {
         ZStack {
@@ -171,10 +219,10 @@ struct MemoryMatrixView: View {
     }
 }
 
-// MARK: - CardTile
+// MARK: - TileView
 
-private struct CardTile: View {
-    let card: MemoryMatrixViewModel.Card
+private struct TileView: View {
+    let tile: MemoryMatrixViewModel.Tile
     let action: () -> Void
 
     var body: some View {
@@ -183,24 +231,34 @@ private struct CardTile: View {
                 .fill(fillStyle)
                 .aspectRatio(1, contentMode: .fit)
                 .overlay {
-                    if card.isFaceUp || card.isMatched {
-                        Image(systemName: card.symbolName)
-                            .font(.system(size: 22, weight: .semibold))
+                    switch tile.state {
+                    case .correct:
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 18, weight: .bold))
                             .foregroundColor(.white)
+                    case .incorrect:
+                        Image(systemName: "xmark")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(.white)
+                    case .normal, .highlighted:
+                        EmptyView()
                     }
                 }
         }
         .buttonStyle(.plain)
-        .disabled(card.isFaceUp || card.isMatched)
-        .animation(.easeOut(duration: 0.2), value: card.isFaceUp)
+        .disabled(tile.state != .normal)
+        .animation(.easeOut(duration: 0.2), value: tile.state)
     }
 
     private var fillStyle: AnyShapeStyle {
-        if card.isMatched {
-            AnyShapeStyle(DesignSystem.memoryGradient.opacity(0.5))
-        } else if card.isFaceUp {
+        switch tile.state {
+        case .highlighted:
             AnyShapeStyle(DesignSystem.memoryGradient)
-        } else {
+        case .correct:
+            AnyShapeStyle(DesignSystem.memoryGradient)
+        case .incorrect:
+            AnyShapeStyle(Color(hex: "#FF6B4A"))
+        case .normal:
             AnyShapeStyle(DesignSystem.backgroundOnboarding.opacity(0.85))
         }
     }

@@ -21,12 +21,12 @@ enum GameCatalog {
             category: .memory,
             iconName: "square.grid.3x3.fill",
             customImageName: "matrix",
-            shortDescription: "Match hidden pairs before time runs out.",
+            shortDescription: "Memorize the lit-up tiles, then tap them from memory.",
             rules: [
-                "A grid of cards flips face-down after a brief preview.",
-                "Tap two cards to flip them and find a matching pair.",
-                "Match every pair before the timer runs out.",
-                "Fewer wrong flips means a higher score."
+                "A few tiles briefly light up on the grid.",
+                "Memorize their positions before they disappear.",
+                "Tap every tile you remember was highlighted.",
+                "One wrong tap ends the round — the grid grows harder each level."
             ],
             scienceExplainer: "Memory Matrix trains your visuospatial working memory — the system that briefly holds and manipulates spatial information. Repeatedly encoding card positions and retrieving them under time pressure strengthens the hippocampal and prefrontal circuits linked to short-term recall."
         ),

@@ -5,16 +5,10 @@ import Combine
 //
 // Owns gameplay state for Speed Match: a rapid sequence of symbols
 // where the user judges whether the current symbol matches the one
-// immediately before it. Runs against a single overall session clock
-// (`sessionDurationSeconds`) rather than a fixed round count or a
-// per-round timeout — answer as many symbols as you can before time
-// runs out. If time expires mid-round, the game simply ends; the
-// in-progress round was never answered, so it's neither scored nor
-// penalized either way.
-//
-// View only renders published state and forwards taps into
-// `answer(_:)`; this ViewModel submits the result itself the moment
-// the game ends.
+// immediately before it, within a short response window per round.
+// Mirrors MemoryMatrixViewModel's conventions — View only renders
+// published state and forwards taps into `answer(_:)`; this ViewModel
+// submits the result itself the moment the game ends.
 
 @MainActor
 final class SpeedMatchViewModel: ObservableObject {
@@ -32,16 +26,17 @@ final class SpeedMatchViewModel: ObservableObject {
         case noMatch
     }
 
+    private struct Round {
+        let symbolName: String
+        /// Whether this round's symbol matches the previous round's
+        /// symbol. Always `false` for round 0 (no previous symbol).
+        let isMatch: Bool
+    }
+
     // MARK: Tunables
 
-    /// Total time budget for the whole game — not per round.
-    static let sessionDurationSeconds: Double = 60.0
-
-    /// Reference window used only to compute the speed bonus on a
-    /// correct answer (100 pts for an instant tap, decaying to a 40 pt
-    /// floor). NOT an enforced timeout — taking longer than this no
-    /// longer ends the round or counts as a miss.
-    static let responseBonusWindowSeconds: Double = 2.0
+    static let totalRounds = 15
+    static let responseWindowSeconds: Double = 2.0
 
     private static let symbolPool = [
         "star.fill", "heart.fill", "bolt.fill", "moon.fill",
@@ -54,13 +49,12 @@ final class SpeedMatchViewModel: ObservableObject {
     @Published private(set) var phase: Phase = .playing
     @Published private(set) var currentRoundIndex: Int = 0
     @Published private(set) var currentSymbol: String = ""
-    /// 1.0 = session just started, 0.0 = time's up. This is now the
-    /// OVERALL session clock, not a per-round window.
+    /// 1.0 = window just opened, 0.0 = window closed. Drives the
+    /// on-screen countdown bar.
     @Published private(set) var timeRemainingFraction: Double = 1.0
     @Published private(set) var correctCount: Int = 0
     @Published private(set) var wrongCount: Int = 0
     @Published private(set) var lastAnswerWasCorrect: Bool?
-    @Published private(set) var score: Int = 0
 
     var isBusySubmitting: Bool { gameResultViewModel.isLoading }
     var submissionErrorMessage: String? { gameResultViewModel.errorMessage }
@@ -69,13 +63,13 @@ final class SpeedMatchViewModel: ObservableObject {
 
     private let gameResultViewModel: GameResultViewModel
     private let isFitTest: Bool
-    private var previousSymbol: String?
-    private var currentRoundIsMatch = false
+    private var rounds: [Round] = []
     private var roundStartedAt: Date?
     private var gameStartedAt: Date?
-    private var sessionTask: Task<Void, Never>?
+    private var roundTask: Task<Void, Never>?
     private var hasAnsweredCurrentRound = false
     private var runningScore: Int = 0
+    @Published private(set) var score: Int = 0
 
     init(gameResultViewModel: GameResultViewModel, isFitTest: Bool = false) {
         self.gameResultViewModel = gameResultViewModel
@@ -86,107 +80,126 @@ final class SpeedMatchViewModel: ObservableObject {
     // MARK: - Setup
 
     func setUpNewGame() {
-        sessionTask?.cancel()
+        roundTask?.cancel()
         correctCount = 0
         wrongCount = 0
         runningScore = 0
-        score = 0
+        score = 0    
         currentRoundIndex = 0
         lastAnswerWasCorrect = nil
-        previousSymbol = nil
-        timeRemainingFraction = 1.0
+        rounds = Self.generateRounds(count: Self.totalRounds)
         phase = .playing
         gameStartedAt = Date()
-        beginRound()
-        startSessionTimer()
+        beginRound(at: 0)
     }
 
-    private static func nextRoundSymbol(after previousSymbol: String?) -> (symbol: String, isMatch: Bool) {
-        let shouldMatch = previousSymbol != nil && Bool.random()
-        let symbol: String
-        if shouldMatch, let previousSymbol {
-            symbol = previousSymbol
-        } else {
-            var candidate = symbolPool.randomElement()!
-            if let previousSymbol {
-                while candidate == previousSymbol {
-                    candidate = symbolPool.randomElement()!
+    private static func generateRounds(count: Int) -> [Round] {
+        var result: [Round] = []
+        var previousSymbol: String?
+
+        for _ in 0..<count {
+            let shouldMatch = previousSymbol != nil && Bool.random()
+            let symbol: String
+            if shouldMatch, let previousSymbol {
+                symbol = previousSymbol
+            } else {
+                var candidate = symbolPool.randomElement()!
+                if let previousSymbol {
+                    while candidate == previousSymbol {
+                        candidate = symbolPool.randomElement()!
+                    }
                 }
+                symbol = candidate
             }
-            symbol = candidate
+            result.append(Round(symbolName: symbol, isMatch: shouldMatch))
+            previousSymbol = symbol
         }
-        return (symbol, shouldMatch)
+        return result
     }
 
-    // MARK: - Session clock
+    // MARK: - Round lifecycle
 
-    private func startSessionTimer() {
-        sessionTask?.cancel()
-        sessionTask = Task { [weak self] in
+    private func beginRound(at index: Int) {
+        guard index < rounds.count else {
+            endGame()
+            return
+        }
+        roundTask?.cancel()
+
+        currentRoundIndex = index
+        currentSymbol = rounds[index].symbolName
+        hasAnsweredCurrentRound = false
+        roundStartedAt = Date()
+        timeRemainingFraction = 1.0
+
+        roundTask = Task { [weak self] in
             guard let self else { return }
-            let steps = 600 // ~100ms resolution over the session
-            let stepDuration = Self.sessionDurationSeconds / Double(steps)
+            let steps = 20
+            let stepDuration = Self.responseWindowSeconds / Double(steps)
             for step in 1...steps {
                 try? await Task.sleep(nanoseconds: UInt64(stepDuration * 1_000_000_000))
                 if Task.isCancelled { return }
                 self.timeRemainingFraction = max(0, 1.0 - Double(step) / Double(steps))
             }
             guard !Task.isCancelled else { return }
-            // Time's up. The in-progress round (if any) was never
-            // answered, so nothing to score or penalize — just end.
-            self.endGame()
+            self.handleTimeout()
         }
     }
 
-    // MARK: - Round lifecycle
-
-    private func beginRound() {
-        let next = Self.nextRoundSymbol(after: previousSymbol)
-        currentSymbol = next.symbol
-        currentRoundIsMatch = next.isMatch
-        previousSymbol = next.symbol
-        hasAnsweredCurrentRound = false
-        roundStartedAt = Date()
+    private func handleTimeout() {
+        // No tap before the window closes counts as a miss — same
+        // penalty path as an explicit wrong answer.
+        guard phase == .playing, !hasAnsweredCurrentRound else { return }
+        hasAnsweredCurrentRound = true
+        wrongCount += 1
+        lastAnswerWasCorrect = false
+        runningScore -= 20
+        score = max(0, runningScore) 
+        advanceToNextRound()
     }
 
     // MARK: - Answering
 
     /// Scoring rule: a correct answer scores 40–100 points on a linear
     /// scale based on reaction time — instant taps earn the full 100,
-    /// taps at or beyond `responseBonusWindowSeconds` still earn the
-    /// 40 pt floor (no hard cutoff — just a shrinking bonus). Wrong
-    /// answers subtract 20. Final score is floored at 0.
+    /// taps right at the edge of the response window still earn 40, so
+    /// speed is rewarded without making a last-moment-but-correct tap
+    /// worthless. Wrong answers (including timeouts) subtract 20.
+    /// Final score is floored at 0.
     func answer(_ answer: Answer) {
         guard phase == .playing, !hasAnsweredCurrentRound else { return }
         hasAnsweredCurrentRound = true
+        roundTask?.cancel()
 
+        let round = rounds[currentRoundIndex]
         let userSaysMatch = (answer == .match)
-        let isCorrect = userSaysMatch == currentRoundIsMatch
+        let isCorrect = userSaysMatch == round.isMatch
 
         if isCorrect {
             correctCount += 1
             lastAnswerWasCorrect = true
 
-            let elapsed = roundStartedAt.map { Date().timeIntervalSince($0) } ?? Self.responseBonusWindowSeconds
-            let clampedElapsed = min(max(elapsed, 0), Self.responseBonusWindowSeconds)
-            let speedFraction = 1.0 - (clampedElapsed / Self.responseBonusWindowSeconds)
+            let elapsed = roundStartedAt.map { Date().timeIntervalSince($0) } ?? Self.responseWindowSeconds
+            let clampedElapsed = min(max(elapsed, 0), Self.responseWindowSeconds)
+            let speedFraction = 1.0 - (clampedElapsed / Self.responseWindowSeconds)
             runningScore += 40 + Int((60.0 * speedFraction).rounded())
+            score = max(0, runningScore)  
         } else {
             wrongCount += 1
             lastAnswerWasCorrect = false
             runningScore -= 20
+            score = max(0, runningScore) 
         }
-        score = max(0, runningScore)
 
         advanceToNextRound()
     }
 
     private func advanceToNextRound() {
+        let nextIndex = currentRoundIndex + 1
         Task { [weak self] in
             try? await Task.sleep(nanoseconds: 250_000_000) // brief pause so feedback is visible
-            guard let self, self.phase == .playing else { return }
-            self.currentRoundIndex += 1
-            self.beginRound()
+            guard let self else { return }
+            self.beginRound(at: nextIndex)
         }
     }
 
@@ -194,14 +207,14 @@ final class SpeedMatchViewModel: ObservableObject {
 
     private func endGame() {
         guard phase == .playing else { return }
-        sessionTask?.cancel()
+        roundTask?.cancel()
 
         let score = max(0, runningScore)
         let duration: Int
         if let gameStartedAt {
             duration = max(1, Int(Date().timeIntervalSince(gameStartedAt).rounded()))
         } else {
-            duration = Int(Self.sessionDurationSeconds)
+            duration = Int(Double(Self.totalRounds) * Self.responseWindowSeconds)
         }
 
         phase = .submitting

@@ -20,6 +20,11 @@ import Combine
 // session and triggers submission, with the score reflecting how far
 // the player got. If a wrong tap should instead just restart the
 // current level, that's a small change confined to `tap(_:)`.
+//
+// CHANGE (this pass): added `liveScore`, a public computed property that
+// reuses the exact same formula as `computeScore()`, so the in-game
+// header can show a running score while playing rather than only at the
+// end. No scoring logic changed — this just exposes it earlier.
 
 @MainActor
 final class MemoryMatrixViewModel: ObservableObject {
@@ -92,6 +97,11 @@ final class MemoryMatrixViewModel: ObservableObject {
     /// feedback before the session ends and results are submitted.
     static let errorFeedbackDelaySeconds: Double = 0.9
 
+    /// Fixed session length, matching the reference UI's "TRIAL 7 of 12".
+    /// Completing this many rounds ends the game as a win, same as a
+    /// wrong tap ends it as a loss — both paths funnel into `endGame()`.
+    static let totalTrials = 12
+
     // MARK: Published state
 
     @Published private(set) var tiles: [Tile] = []
@@ -116,6 +126,12 @@ final class MemoryMatrixViewModel: ObservableObject {
 
     var isBusySubmitting: Bool { gameResultViewModel.isLoading }
     var submissionErrorMessage: String? { gameResultViewModel.errorMessage }
+
+    /// Running score for the in-progress session, using the exact same
+    /// formula as the final submitted score. Safe to read at any point
+    /// in the game (including before the first round completes, where
+    /// it's simply 0). Used by the header stat bar.
+    var liveScore: Int { computeScore() }
 
     // MARK: Private state
 
@@ -232,6 +248,16 @@ final class MemoryMatrixViewModel: ObservableObject {
         isInputLocked = true
         roundJustCompleted = true
         completedRounds += 1
+
+        // Fixed-length session: once the player clears the final trial,
+        // end the game (as a win) instead of starting another round.
+        if completedRounds >= Self.totalTrials {
+            Task { [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(Self.interRoundDelaySeconds * 1_000_000_000))
+                self?.endGame()
+            }
+            return
+        }
 
         Task { [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(Self.interRoundDelaySeconds * 1_000_000_000))

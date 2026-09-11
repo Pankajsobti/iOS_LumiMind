@@ -109,6 +109,28 @@ enum DesignSystem {
         }
     }
 
+    // MARK: - Memory Matrix Board
+    //
+    // ADDED — not part of the original locked set. Memory Matrix's board
+    // UI is a distinct "wood board + teal tile" look that doesn't map to
+    // any existing token (the closest locked color, `memoryGradient`, is
+    // plum/berry). These three tokens are scoped to that one screen only;
+    // nothing else in the app should reference them. If this look should
+    // extend elsewhere, promote these to a proper top-level section.
+
+    /// Board frame background — warm wood brown.
+    static let matrixBoardBackground = Color(hex: "#6B4A3D")
+
+    /// Resting (unrevealed) tile fill — lighter warm brown.
+    static let matrixTileResting = Color(hex: "#82604F")
+
+    /// Highlighted / correctly-tapped tile fill — teal-to-aqua gradient.
+    static let matrixTileGradient = LinearGradient(
+        colors: [Color(hex: "#3FC7B8"), Color(hex: "#5EEAD4")],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+
     // MARK: - Typography
     //
     // Rounded sans-serif throughout the app (SF Rounded via the

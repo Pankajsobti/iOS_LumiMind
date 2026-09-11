@@ -7,10 +7,16 @@ import SwiftUI
 // it. All gameplay/scoring/submission logic lives in the ViewModel; this
 // View is purely presentational + navigation, same as before.
 //
-// Background/gradient usage unchanged from the previous implementation:
-// cream `backgroundMain` for the game surface, `memoryGradient` for the
-// header and highlighted tiles, `backgroundOnboarding` for overlay
-// surfaces and the resting tile color.
+// RESTYLE PASS: layout now matches the reference "game board" look —
+// a top stat bar (pause / tiles / trial / score) above a single bordered
+// board containing a gapless grid of square cells. Colors come from the
+// new `matrixBoardBackground` / `matrixTileResting` / `matrixTileGradient`
+// tokens added to DesignSystem specifically for this screen (see that
+// file's "Memory Matrix Board" section) — so the brown/teal look is
+// still sourced from DesignSystem, not hardcoded here.
+//
+// Session length is now fixed at `MemoryMatrixViewModel.totalTrials`
+// (12), matching the reference's "TRIAL 7 of 12".
 
 struct MemoryMatrixView: View {
     @StateObject private var viewModel: MemoryMatrixViewModel
@@ -25,23 +31,26 @@ struct MemoryMatrixView: View {
     }
 
     private var columns: [GridItem] {
-        Array(repeating: GridItem(.flexible(), spacing: DesignSystem.Spacing.sm), count: viewModel.gridSize)
+        Array(repeating: GridItem(.flexible(), spacing: 0), count: viewModel.gridSize)
     }
 
     var body: some View {
         ZStack {
-            DesignSystem.backgroundMain
+            DesignSystem.matrixBoardBackground
                 .ignoresSafeArea()
 
             VStack(spacing: DesignSystem.Spacing.lg) {
-                header
-
-                grid
-                    .padding(.horizontal, DesignSystem.Spacing.md)
+                statBar
 
                 Spacer()
+
+                board
+                    .padding(.horizontal, DesignSystem.Spacing.lg)
+
+                Spacer()
+                Spacer()
             }
-            .padding(.top, DesignSystem.Spacing.lg)
+            .padding(.top, DesignSystem.Spacing.md)
 
             if case .preview = viewModel.phase {
                 previewOverlay
@@ -65,45 +74,62 @@ struct MemoryMatrixView: View {
         }
     }
 
-    // MARK: Header
+    // MARK: Top stat bar
 
-    private var header: some View {
-        VStack(spacing: DesignSystem.Spacing.sm) {
-            HStack {
-                Text("Memory Matrix")
-                    .font(DesignSystem.title2)
+    private var statBar: some View {
+        HStack(spacing: DesignSystem.Spacing.md) {
+            Button(action: { /* pause action owned by caller / navigation */ }) {
+                Image(systemName: "pause.fill")
+                    .font(.system(size: 15, weight: .bold))
                     .foregroundColor(.white)
-
-                Spacer()
-
-                Text("Level \(viewModel.level)")
-                    .font(DesignSystem.roundedFont(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
+                    .frame(width: 36, height: 36)
+                    .background(DesignSystem.backgroundOnboarding.opacity(0.6))
+                    .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact)
+                            .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                    )
             }
+            .buttonStyle(.plain)
 
-            HStack {
-                Text("\(viewModel.targetsFound)/\(viewModel.targetCount) found")
-                    .font(DesignSystem.subheadline)
-                    .foregroundColor(.white.opacity(0.85))
-                Spacer()
-            }
+            Spacer()
+
+            statGroup(label: "TILES", value: "\(viewModel.targetCount)")
+            statGroup(label: "TRIAL", value: "\(viewModel.level) of \(MemoryMatrixViewModel.totalTrials)")
+            statGroup(label: "SCORE", value: "\(viewModel.liveScore)")
         }
-        .padding(DesignSystem.Spacing.md)
-        .background(DesignSystem.memoryGradient)
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius))
         .padding(.horizontal, DesignSystem.Spacing.md)
     }
 
-    // MARK: Grid
+    private func statGroup(label: String, value: String) -> some View {
+        VStack(spacing: 2) {
+            Text(label)
+                .font(DesignSystem.roundedFont(size: 11, weight: .semibold))
+                .foregroundColor(.white.opacity(0.6))
+                .tracking(0.5)
+            Text(value)
+                .font(DesignSystem.roundedFont(size: 17, weight: .bold))
+                .foregroundColor(.white)
+        }
+    }
 
-    private var grid: some View {
-        LazyVGrid(columns: columns, spacing: DesignSystem.Spacing.sm) {
+    // MARK: Board
+
+    private var board: some View {
+        LazyVGrid(columns: columns, spacing: 0) {
             ForEach(viewModel.tiles) { tile in
                 TileView(tile: tile) {
                     viewModel.tap(tile)
                 }
             }
         }
+        .padding(DesignSystem.Spacing.xs)
+        .background(DesignSystem.matrixBoardBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact)
+                .stroke(Color.white.opacity(0.25), lineWidth: 3)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact))
         .allowsHitTesting(viewModel.canInteract)
         .animation(.easeInOut(duration: 0.2), value: viewModel.gridSize)
     }
@@ -118,7 +144,7 @@ struct MemoryMatrixView: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, DesignSystem.Spacing.lg)
                 .padding(.vertical, DesignSystem.Spacing.sm)
-                .background(DesignSystem.backgroundOnboarding.opacity(0.85))
+                .background(DesignSystem.matrixTileGradient)
                 .clipShape(Capsule())
                 .padding(.bottom, DesignSystem.Spacing.xxl)
         }
@@ -134,7 +160,7 @@ struct MemoryMatrixView: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, DesignSystem.Spacing.lg)
                 .padding(.vertical, DesignSystem.Spacing.sm)
-                .background(DesignSystem.memoryGradient)
+                .background(DesignSystem.matrixTileGradient)
                 .clipShape(Capsule())
                 .padding(.bottom, DesignSystem.Spacing.xxl)
         }
@@ -163,7 +189,7 @@ struct MemoryMatrixView: View {
 
     private func statusOverlay(message: String, showsSpinner: Bool) -> some View {
         ZStack {
-            DesignSystem.backgroundOnboarding.opacity(0.55).ignoresSafeArea()
+            Color.black.opacity(0.55).ignoresSafeArea()
             VStack(spacing: DesignSystem.Spacing.md) {
                 if showsSpinner {
                     ProgressView()
@@ -181,7 +207,7 @@ struct MemoryMatrixView: View {
 
     private func finishedOverlay(score: Int) -> some View {
         ZStack {
-            DesignSystem.backgroundOnboarding.opacity(0.55).ignoresSafeArea()
+            Color.black.opacity(0.55).ignoresSafeArea()
 
             VStack(spacing: DesignSystem.Spacing.md) {
                 Text("Nice work!")
@@ -202,7 +228,7 @@ struct MemoryMatrixView: View {
                 Button(action: onComplete) {
                     Text("Continue")
                         .font(DesignSystem.buttonLabel)
-                        .foregroundColor(DesignSystem.backgroundMain)
+                        .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, DesignSystem.Spacing.md)
                 }
@@ -227,9 +253,12 @@ private struct TileView: View {
 
     var body: some View {
         Button(action: action) {
-            RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact)
-                .fill(fillStyle)
+            fillStyle
                 .aspectRatio(1, contentMode: .fit)
+                .overlay(
+                    Rectangle()
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                )
                 .overlay {
                     switch tile.state {
                     case .correct:
@@ -250,16 +279,16 @@ private struct TileView: View {
         .animation(.easeOut(duration: 0.2), value: tile.state)
     }
 
-    private var fillStyle: AnyShapeStyle {
+    private var fillStyle: AnyView {
         switch tile.state {
         case .highlighted:
-            AnyShapeStyle(DesignSystem.memoryGradient)
+            return AnyView(Rectangle().fill(DesignSystem.matrixTileGradient))
         case .correct:
-            AnyShapeStyle(DesignSystem.memoryGradient)
+            return AnyView(Rectangle().fill(DesignSystem.matrixTileGradient))
         case .incorrect:
-            AnyShapeStyle(Color(hex: "#FF6B4A"))
+            return AnyView(Rectangle().fill(Color(hex: "#FF6B4A")))
         case .normal:
-            AnyShapeStyle(DesignSystem.backgroundOnboarding.opacity(0.85))
+            return AnyView(Rectangle().fill(DesignSystem.matrixTileResting))
         }
     }
 }

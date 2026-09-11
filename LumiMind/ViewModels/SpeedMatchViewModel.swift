@@ -69,6 +69,7 @@ final class SpeedMatchViewModel: ObservableObject {
     private var roundTask: Task<Void, Never>?
     private var hasAnsweredCurrentRound = false
     private var runningScore: Int = 0
+    @Published private(set) var score: Int = 0
 
     init(gameResultViewModel: GameResultViewModel, isFitTest: Bool = false) {
         self.gameResultViewModel = gameResultViewModel
@@ -83,6 +84,7 @@ final class SpeedMatchViewModel: ObservableObject {
         correctCount = 0
         wrongCount = 0
         runningScore = 0
+        score = 0    
         currentRoundIndex = 0
         lastAnswerWasCorrect = nil
         rounds = Self.generateRounds(count: Self.totalRounds)
@@ -152,6 +154,7 @@ final class SpeedMatchViewModel: ObservableObject {
         wrongCount += 1
         lastAnswerWasCorrect = false
         runningScore -= 20
+        score = max(0, runningScore) 
         advanceToNextRound()
     }
 
@@ -180,10 +183,12 @@ final class SpeedMatchViewModel: ObservableObject {
             let clampedElapsed = min(max(elapsed, 0), Self.responseWindowSeconds)
             let speedFraction = 1.0 - (clampedElapsed / Self.responseWindowSeconds)
             runningScore += 40 + Int((60.0 * speedFraction).rounded())
+            score = max(0, runningScore)  
         } else {
             wrongCount += 1
             lastAnswerWasCorrect = false
             runningScore -= 20
+            score = max(0, runningScore) 
         }
 
         advanceToNextRound()

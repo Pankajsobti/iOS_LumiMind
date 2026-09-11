@@ -3,10 +3,13 @@ import SwiftUI
 // MARK: - SpeedMatchView
 //
 // Presentational only — renders whatever SpeedMatchViewModel reports
-// and forwards taps into `answer(_:)`. Same structure as
-// MemoryMatrixView: header uses the category gradient, a finished
-// overlay shows the score with a Continue button that calls
-// onComplete (caller then routes to ScienceExplainerView).
+// and forwards taps into `answer(_:)`. Visual pass: stat bar (TIME +
+// live SCORE) replaces the old title/round-counter header, symbol card
+// is now a flat white card with a gradient-tinted glyph instead of a
+// gradient-filled card, and the footer is a full-width split NO/YES
+// bar instead of capsule buttons. No ViewModel bindings, callbacks, or
+// scoring logic were touched — only `score` was added as a published
+// read-out of the existing private accumulator.
 
 struct SpeedMatchView: View {
     @StateObject private var viewModel: SpeedMatchViewModel
@@ -22,20 +25,27 @@ struct SpeedMatchView: View {
             DesignSystem.backgroundMain.ignoresSafeArea()
 
             VStack(spacing: DesignSystem.Spacing.lg) {
-                header
+                statBar
+                progressDots
 
                 Spacer()
 
                 symbolCard
 
+                questionText
+
                 feedbackLabel
                     .frame(height: 22)
 
                 Spacer()
-
-                answerButtons
             }
-            .padding(.vertical, DesignSystem.Spacing.lg)
+            .padding(.top, DesignSystem.Spacing.lg)
+            .padding(.horizontal, DesignSystem.Spacing.md)
+
+            VStack {
+                Spacer()
+                answerBar
+            }
 
             if case .submitting = viewModel.phase {
                 statusOverlay(message: "Saving your result…")
@@ -47,40 +57,75 @@ struct SpeedMatchView: View {
         }
     }
 
-    // MARK: Header
+    // MARK: Stat bar (TIME | SCORE)
 
-    private var header: some View {
-        VStack(spacing: DesignSystem.Spacing.sm) {
-            HStack {
-                Text("Speed Match")
-                    .font(DesignSystem.title2)
-                    .foregroundColor(.white)
-                Spacer()
-                Text("\(min(viewModel.currentRoundIndex + 1, SpeedMatchViewModel.totalRounds))/\(SpeedMatchViewModel.totalRounds)")
-                    .font(DesignSystem.roundedFont(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
-            }
-            ProgressBar(fraction: viewModel.timeRemainingFraction)
+    private var statBar: some View {
+        HStack(spacing: 0) {
+            statColumn(label: "TIME", value: timeRemainingText)
+            Divider()
+                .frame(height: 28)
+                .overlay(DesignSystem.backgroundOnboarding.opacity(0.15))
+            statColumn(label: "SCORE", value: "\(viewModel.score)")
         }
-        .padding(DesignSystem.Spacing.md)
-        .background(DesignSystem.speedGradient)
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius))
+        .padding(.vertical, DesignSystem.Spacing.sm)
         .padding(.horizontal, DesignSystem.Spacing.md)
+        .background(.white)
+        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact))
+    }
+
+    private func statColumn(label: String, value: String) -> some View {
+        HStack(spacing: DesignSystem.Spacing.xs) {
+            Text(label)
+                .font(DesignSystem.caption)
+                .foregroundColor(DesignSystem.backgroundOnboarding.opacity(0.5))
+            Text(value)
+                .font(DesignSystem.roundedFont(size: 17, weight: .bold))
+                .foregroundColor(DesignSystem.backgroundOnboarding)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var timeRemainingText: String {
+        let totalSeconds = SpeedMatchViewModel.responseWindowSeconds
+        let remaining = max(0, viewModel.timeRemainingFraction) * totalSeconds
+        let displaySeconds = Int(remaining.rounded(.up))
+        let minutes = displaySeconds / 60
+        let seconds = displaySeconds % 60
+        return String(format: "%d:%02d", minutes, seconds)
+    }
+
+    // MARK: Progress dots (cosmetic only — no lives/streak/multiplier exist in the ViewModel)
+
+    private var progressDots: some View {
+        ProgressDotsView(
+            totalDots: 5,
+            filledFraction: Double(viewModel.currentRoundIndex) / Double(max(1, SpeedMatchViewModel.totalRounds - 1)),
+            fillColor: DesignSystem.speedGradient
+        )
     }
 
     // MARK: Symbol card
 
     private var symbolCard: some View {
         RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius)
-            .fill(DesignSystem.speedGradient)
+            .fill(.white)
             .frame(width: 180, height: 180)
+            .shadow(color: DesignSystem.backgroundOnboarding.opacity(0.08), radius: 12, y: 6)
             .overlay {
                 if !viewModel.currentSymbol.isEmpty {
                     Image(systemName: viewModel.currentSymbol)
                         .font(.system(size: 64, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(DesignSystem.speedGradient)
                 }
             }
+    }
+
+    private var questionText: some View {
+        Text("Does this symbol match the previous symbol?")
+            .font(DesignSystem.body)
+            .foregroundColor(DesignSystem.backgroundOnboarding.opacity(0.65))
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, DesignSystem.Spacing.lg)
     }
 
     @ViewBuilder
@@ -95,37 +140,34 @@ struct SpeedMatchView: View {
         }
     }
 
-    // MARK: Answer buttons
+    // MARK: Answer bar (full-width split NO / YES)
 
-    private var answerButtons: some View {
-        HStack(spacing: DesignSystem.Spacing.md) {
-            Button { viewModel.answer(.noMatch) } label: {
-                Text("No Match")
-                    .font(DesignSystem.buttonLabel)
-                    .foregroundColor(DesignSystem.backgroundOnboarding)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, DesignSystem.Spacing.md)
-            }
-            .buttonStyle(.plain)
-            .background(.white)
-            .clipShape(Capsule())
-
-            Button { viewModel.answer(.match) } label: {
-                Text("Match")
-                    .font(DesignSystem.buttonLabel)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, DesignSystem.Spacing.md)
-            }
-            .buttonStyle(.plain)
-            .background(DesignSystem.primaryGradient)
-            .clipShape(Capsule())
+    private var answerBar: some View {
+        HStack(spacing: 0) {
+            answerHalf(title: "NO") { viewModel.answer(.noMatch) }
+            Rectangle()
+                .fill(.white.opacity(0.12))
+                .frame(width: 1)
+            answerHalf(title: "YES") { viewModel.answer(.match) }
         }
-        .padding(.horizontal, DesignSystem.Spacing.md)
+        .frame(height: 76)
+        .background(DesignSystem.backgroundOnboarding)
         .disabled(viewModel.phase != .playing)
+        .opacity(viewModel.phase == .playing ? 1 : 0.5)
+        .ignoresSafeArea(edges: .bottom)
     }
 
-    // MARK: Overlays
+    private func answerHalf(title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(DesignSystem.roundedFont(size: 19, weight: .bold))
+                .foregroundStyle(DesignSystem.primaryGradient)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: Overlays (unchanged)
 
     private func statusOverlay(message: String) -> some View {
         ZStack {
@@ -182,20 +224,26 @@ struct SpeedMatchView: View {
     }
 }
 
-// MARK: - ProgressBar
+// MARK: - ProgressDotsView (new reusable component)
 
-private struct ProgressBar: View {
-    let fraction: Double
+/// A row of small dots showing coarse progress toward completion.
+/// Purely decorative — takes a 0...1 fraction and a fill style, no
+/// concept of lives/streaks/attempts. Reusable on any screen that
+/// wants a lightweight progress indicator distinct from a full bar.
+struct ProgressDotsView: View {
+    let totalDots: Int
+    let filledFraction: Double
+    let fillColor: LinearGradient
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule().fill(.white.opacity(0.3))
-                Capsule().fill(.white)
-                    .frame(width: geo.size.width * max(0, min(1, fraction)))
+        let filledCount = Int((Double(totalDots) * min(1, max(0, filledFraction))).rounded())
+        HStack(spacing: DesignSystem.Spacing.xs) {
+            ForEach(0..<totalDots, id: \.self) { index in
+                Circle()
+                    .fill(index < filledCount ? AnyShapeStyle(fillColor) : AnyShapeStyle(DesignSystem.backgroundOnboarding.opacity(0.15)))
+                    .frame(width: 8, height: 8)
             }
         }
-        .frame(height: 6)
     }
 }
 

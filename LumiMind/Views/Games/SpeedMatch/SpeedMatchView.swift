@@ -116,8 +116,14 @@ struct SpeedMatchView: View {
                     Image(systemName: viewModel.currentSymbol)
                         .font(.system(size: 64, weight: .semibold))
                         .foregroundStyle(DesignSystem.speedGradient)
+                        .id(viewModel.currentRoundIndex)
+                        .transition(.asymmetric(
+                            insertion: .scale(scale: 0.6).combined(with: .opacity),
+                            removal: .opacity
+                        ))
                 }
             }
+            .animation(.spring(response: 0.35, dampingFraction: 0.7), value: viewModel.currentRoundIndex)
     }
 
     private var questionText: some View {
@@ -151,10 +157,12 @@ struct SpeedMatchView: View {
             answerHalf(title: "YES") { viewModel.answer(.match) }
         }
         .frame(height: 76)
-        .background(DesignSystem.backgroundOnboarding)
+        .background(
+            DesignSystem.backgroundOnboarding
+                .ignoresSafeArea(edges: .bottom)
+        )
         .disabled(viewModel.phase != .playing)
         .opacity(viewModel.phase == .playing ? 1 : 0.5)
-        .ignoresSafeArea(edges: .bottom)
     }
 
     private func answerHalf(title: String, action: @escaping () -> Void) -> some View {

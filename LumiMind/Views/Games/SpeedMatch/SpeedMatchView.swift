@@ -42,11 +42,6 @@ struct SpeedMatchView: View {
             .padding(.top, DesignSystem.Spacing.lg)
             .padding(.horizontal, DesignSystem.Spacing.md)
 
-            VStack {
-                Spacer()
-                answerBar
-            }
-
             if case .submitting = viewModel.phase {
                 statusOverlay(message: "Saving your result…")
             }
@@ -54,6 +49,9 @@ struct SpeedMatchView: View {
             if case .finished(let score) = viewModel.phase {
                 finishedOverlay(score: score)
             }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            answerBar
         }
     }
 
@@ -106,24 +104,29 @@ struct SpeedMatchView: View {
 
     // MARK: Symbol card
 
-    private var symbolCard: some View {
+        private var symbolCard: some View {
         RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius)
             .fill(.white)
             .frame(width: 180, height: 180)
             .shadow(color: DesignSystem.backgroundOnboarding.opacity(0.08), radius: 12, y: 6)
             .overlay {
-                if !viewModel.currentSymbol.isEmpty {
-                    Image(systemName: viewModel.currentSymbol)
-                        .font(.system(size: 64, weight: .semibold))
-                        .foregroundStyle(DesignSystem.speedGradient)
-                        .id(viewModel.currentRoundIndex)
-                        .transition(.asymmetric(
-                            insertion: .scale(scale: 0.6).combined(with: .opacity),
-                            removal: .opacity
-                        ))
+                ZStack {
+                    if !viewModel.currentSymbol.isEmpty {
+                        Image(systemName: viewModel.currentSymbol)
+                            .font(.system(size: 64, weight: .semibold))
+                            .foregroundStyle(DesignSystem.speedGradient)
+                            .frame(width: 180, height: 180)   // <- key fix: matches card, so move() slides full width
+                            .id(viewModel.currentRoundIndex)
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .trailing).combined(with: .opacity),
+                                removal: .move(edge: .leading).combined(with: .opacity)
+                            ))
+                    }
                 }
+                .frame(width: 180, height: 180)
+                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius))
             }
-            .animation(.spring(response: 0.35, dampingFraction: 0.7), value: viewModel.currentRoundIndex)
+            .animation(.easeInOut(duration: 0.3), value: viewModel.currentRoundIndex)
     }
 
     private var questionText: some View {

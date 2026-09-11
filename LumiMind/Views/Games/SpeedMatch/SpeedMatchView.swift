@@ -118,7 +118,7 @@ struct SpeedMatchView: View {
                             .frame(width: 180, height: 180)   // <- key fix: matches card, so move() slides full width
                             .id(viewModel.currentRoundIndex)
                             .transition(.asymmetric(
-                                insertion: .move(edge: .trailing).combined(with: .opacity),
+                                insertion: .opacity,
                                 removal: .move(edge: .leading).combined(with: .opacity)
                             ))
                     }
@@ -160,10 +160,7 @@ struct SpeedMatchView: View {
             answerHalf(title: "YES") { viewModel.answer(.match) }
         }
         .frame(height: 76)
-        .background(
-            DesignSystem.backgroundOnboarding
-                .ignoresSafeArea(edges: .bottom)
-        )
+        .background(DesignSystem.backgroundOnboarding)
         .disabled(viewModel.phase != .playing)
         .opacity(viewModel.phase == .playing ? 1 : 0.5)
     }

@@ -147,6 +147,7 @@ private var statBar: some View {
                 }
         )
     }
+    .ignoresSafeArea()
     .disabled(viewModel.phase != .playing)
 }
 

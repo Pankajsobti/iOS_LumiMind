@@ -79,35 +79,28 @@ final class TrainOfThoughtViewModel: ObservableObject {
     // stands in for a full procedural-graph + reachability validator
     // (see optional enhancements).
 
+    // NEW
     static let stations: [StationState] = [
-        StationState(id: "red",    position: CGPoint(x: 25,  y: 430), colorHex: "#FF5E5B"),
-        StationState(id: "blue",   position: CGPoint(x: 100, y: 430), colorHex: "#4A7BFF"),
-        StationState(id: "green",  position: CGPoint(x: 170, y: 430), colorHex: "#2ECC71"),
-        StationState(id: "orange", position: CGPoint(x: 240, y: 430), colorHex: "#FF8A3D"),
-        StationState(id: "purple", position: CGPoint(x: 315, y: 430), colorHex: "#9B6BFF")
+        StationState(id: "red",    position: CGPoint(x: 25,  y: 150), colorHex: "#FF5E5B"),
+        StationState(id: "blue",   position: CGPoint(x: 60,  y: 290), colorHex: "#4A7BFF"),
+        StationState(id: "green",  position: CGPoint(x: 320, y: 150), colorHex: "#2ECC71"),
+        StationState(id: "orange", position: CGPoint(x: 170, y: 380), colorHex: "#FF8A3D"),
+        StationState(id: "purple", position: CGPoint(x: 300, y: 400), colorHex: "#9B6BFF")
     ]
 
+    // NEW
     static let segments: [String: TrackSegment] = {
         var s: [String: TrackSegment] = [:]
-        // Entries converge into the shared trunk switch s0.
-        s["e1"] = TrackSegment(id: "e1", points: [CGPoint(x: 60, y: 20), CGPoint(x: 170, y: 130)], destination: .switchNode("s0"))
-        s["e2"] = TrackSegment(id: "e2", points: [CGPoint(x: 280, y: 20), CGPoint(x: 170, y: 130)], destination: .switchNode("s0"))
-
-        // Trunk splits into the two subtrees.
-        s["s0_a"] = TrackSegment(id: "s0_a", points: [CGPoint(x: 170, y: 130), CGPoint(x: 95, y: 230)], destination: .switchNode("s1"))
-        s["s0_b"] = TrackSegment(id: "s0_b", points: [CGPoint(x: 170, y: 130), CGPoint(x: 245, y: 230)], destination: .switchNode("s2"))
-
-        // s1 -> red / blue
-        s["s1_a"] = TrackSegment(id: "s1_a", points: [CGPoint(x: 95, y: 230), CGPoint(x: 25, y: 430)], destination: .station("red"))
-        s["s1_b"] = TrackSegment(id: "s1_b", points: [CGPoint(x: 95, y: 230), CGPoint(x: 100, y: 430)], destination: .station("blue"))
-
-        // s2 -> green directly, or down into s3
-        s["s2_a"] = TrackSegment(id: "s2_a", points: [CGPoint(x: 245, y: 230), CGPoint(x: 170, y: 430)], destination: .station("green"))
-        s["s2_b"] = TrackSegment(id: "s2_b", points: [CGPoint(x: 245, y: 230), CGPoint(x: 280, y: 320)], destination: .switchNode("s3"))
-
-        // s3 -> orange / purple
-        s["s3_a"] = TrackSegment(id: "s3_a", points: [CGPoint(x: 280, y: 320), CGPoint(x: 240, y: 430)], destination: .station("orange"))
-        s["s3_b"] = TrackSegment(id: "s3_b", points: [CGPoint(x: 280, y: 320), CGPoint(x: 315, y: 430)], destination: .station("purple"))
+        s["e1"] = TrackSegment(id: "e1", points: [CGPoint(x: 60, y: 15), CGPoint(x: 170, y: 100)], destination: .switchNode("s0"))
+        s["e2"] = TrackSegment(id: "e2", points: [CGPoint(x: 280, y: 15), CGPoint(x: 170, y: 100)], destination: .switchNode("s0"))
+        s["s0_a"] = TrackSegment(id: "s0_a", points: [CGPoint(x: 170, y: 100), CGPoint(x: 110, y: 140), CGPoint(x: 90, y: 190)], destination: .switchNode("s1"))
+        s["s0_b"] = TrackSegment(id: "s0_b", points: [CGPoint(x: 170, y: 100), CGPoint(x: 230, y: 140), CGPoint(x: 260, y: 190)], destination: .switchNode("s2"))
+        s["s1_a"] = TrackSegment(id: "s1_a", points: [CGPoint(x: 90, y: 190), CGPoint(x: 50, y: 165), CGPoint(x: 25, y: 150)], destination: .station("red"))
+        s["s1_b"] = TrackSegment(id: "s1_b", points: [CGPoint(x: 90, y: 190), CGPoint(x: 70, y: 240), CGPoint(x: 60, y: 290)], destination: .station("blue"))
+        s["s2_a"] = TrackSegment(id: "s2_a", points: [CGPoint(x: 260, y: 190), CGPoint(x: 300, y: 165), CGPoint(x: 320, y: 150)], destination: .station("green"))
+        s["s2_b"] = TrackSegment(id: "s2_b", points: [CGPoint(x: 260, y: 190), CGPoint(x: 250, y: 240), CGPoint(x: 230, y: 300)], destination: .switchNode("s3"))
+        s["s3_a"] = TrackSegment(id: "s3_a", points: [CGPoint(x: 230, y: 300), CGPoint(x: 195, y: 340), CGPoint(x: 170, y: 380)], destination: .station("orange"))
+        s["s3_b"] = TrackSegment(id: "s3_b", points: [CGPoint(x: 230, y: 300), CGPoint(x: 270, y: 350), CGPoint(x: 300, y: 400)], destination: .station("purple"))
         return s
     }()
 
@@ -115,11 +108,12 @@ final class TrainOfThoughtViewModel: ObservableObject {
 
     @Published private(set) var phase: Phase = .playing
     @Published private(set) var trains: [TrainState] = []
+   // NEW
     @Published private(set) var switches: [SwitchState] = [
-        SwitchState(id: "s0", position: CGPoint(x: 170, y: 130), activeBranch: 0, branchSegmentIds: ["s0_a", "s0_b"]),
-        SwitchState(id: "s1", position: CGPoint(x: 95, y: 230), activeBranch: 0, branchSegmentIds: ["s1_a", "s1_b"]),
-        SwitchState(id: "s2", position: CGPoint(x: 245, y: 230), activeBranch: 0, branchSegmentIds: ["s2_a", "s2_b"]),
-        SwitchState(id: "s3", position: CGPoint(x: 280, y: 320), activeBranch: 0, branchSegmentIds: ["s3_a", "s3_b"])
+        SwitchState(id: "s0", position: CGPoint(x: 170, y: 100), activeBranch: 0, branchSegmentIds: ["s0_a", "s0_b"]),
+        SwitchState(id: "s1", position: CGPoint(x: 90, y: 190),  activeBranch: 0, branchSegmentIds: ["s1_a", "s1_b"]),
+        SwitchState(id: "s2", position: CGPoint(x: 260, y: 190), activeBranch: 0, branchSegmentIds: ["s2_a", "s2_b"]),
+        SwitchState(id: "s3", position: CGPoint(x: 230, y: 300), activeBranch: 0, branchSegmentIds: ["s3_a", "s3_b"])
     ]
     @Published private(set) var timeRemainingFraction: Double = 1.0
     @Published private(set) var successCount: Int = 0

@@ -202,10 +202,17 @@ final class FlowSwitchViewModel: ObservableObject {
 
     // MARK: - Position helpers
 
+    /// Margin (in normalized units) a leaf travels PAST the visible
+    /// edge before wrapping to the opposite side — so it fully exits
+    /// the screen before reappearing, instead of teleporting while
+    /// still partly visible.
+    private static let wrapMargin: CGFloat = 0.15
+
     private static func wrapped(_ value: CGFloat) -> CGFloat {
-        var v = value.truncatingRemainder(dividingBy: 1)
-        if v < 0 { v += 1 }
-        return v
+        let range: CGFloat = 1 + 2 * wrapMargin
+        var v = (value + wrapMargin).truncatingRemainder(dividingBy: range)
+        if v < 0 { v += range }
+        return v - wrapMargin
     }
 
     /// Live position of a leaf right now, given the current anchor/velocity/referenceTime.

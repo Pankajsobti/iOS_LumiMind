@@ -138,6 +138,7 @@ private var statBar: some View {
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
+        .clipped()
         .contentShape(Rectangle())
         .gesture(
             DragGesture(minimumDistance: 20)
@@ -164,10 +165,13 @@ private var statBar: some View {
         .transaction { $0.disablesAnimations = true }
 }
 
+    private static let wrapMargin: CGFloat = 0.15
+
     private static func wrapped(_ value: CGFloat) -> CGFloat {
-        var v = value.truncatingRemainder(dividingBy: 1)
-        if v < 0 { v += 1 }
-        return v
+        let range: CGFloat = 1 + 2 * wrapMargin
+        var v = (value + wrapMargin).truncatingRemainder(dividingBy: range)
+        if v < 0 { v += range }
+        return v - wrapMargin
     }
 
     private static func direction(for translation: CGSize) -> FlowSwitchViewModel.Direction {

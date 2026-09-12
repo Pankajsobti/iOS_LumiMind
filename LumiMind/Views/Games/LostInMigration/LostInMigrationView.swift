@@ -53,38 +53,118 @@ struct LostInMigrationView: View {
     //
     // Self-contained palette scoped to this screen only, same
     // pattern TrainOfThoughtView already uses for its forest — no
-    // new tokens added to DesignSystem.
+    // new tokens added to DesignSystem. Layered for depth: a
+    // multi-stop sky, a soft sun halo, faint slow-drifting migrating
+    // birds up in the distance, several depth-varied clouds, two
+    // rolling hill silhouettes behind the tree line, and a very
+    // subtle static paper-grain texture tying it back to the
+    // reference screenshot's paper-like background.
 
     private static let skyTop = Color(hex: "#8FD9DC")
     private static let skyBottom = Color(hex: "#4FB8C4")
-    private static let cloudColor = Color.white.opacity(0.55)
-    private static let sunColor = Color.white.opacity(0.45)
-    private static let treeColor = Color(hex: "#3FA6AE").opacity(0.55)
+    private static let skyHighlight = Color(hex: "#6FD4D6")
+    private static let cloudColor = Color.white
+    private static let sunColor = Color.white.opacity(0.55)
+    private static let farHillColor = Color(hex: "#3FA6AE").opacity(0.3)
+    private static let nearHillColor = Color(hex: "#2E8A93").opacity(0.45)
+    private static let treeColor = Color(hex: "#256F78").opacity(0.55)
+
+    private struct CloudSpec: Identifiable {
+        let id = UUID()
+        let position: CGPoint
+        let width: CGFloat
+        let height: CGFloat
+        let opacity: Double
+        let drift: CGFloat
+        let duration: Double
+        let delay: Double
+    }
+
+    private struct DistantBirdSpec: Identifiable {
+        let id = UUID()
+        let position: CGPoint
+        let size: CGFloat
+        let opacity: Double
+        let drift: CGFloat
+        let duration: Double
+        let delay: Double
+    }
+
+    private static let clouds: [CloudSpec] = [
+        CloudSpec(position: CGPoint(x: 90, y: 130), width: 120, height: 50, opacity: 0.55, drift: 14, duration: 9, delay: 0),
+        CloudSpec(position: CGPoint(x: 335, y: 215), width: 90, height: 40, opacity: 0.4, drift: 10, duration: 7, delay: 1.2),
+        CloudSpec(position: CGPoint(x: 60, y: 335), width: 140, height: 55, opacity: 0.5, drift: 16, duration: 11, delay: 0.5),
+        CloudSpec(position: CGPoint(x: 345, y: 465), width: 100, height: 42, opacity: 0.35, drift: 12, duration: 8, delay: 2)
+    ]
+
+    private static let distantBirds: [DistantBirdSpec] = [
+        DistantBirdSpec(position: CGPoint(x: 250, y: 95), size: 14, opacity: 0.3, drift: 18, duration: 6, delay: 0),
+        DistantBirdSpec(position: CGPoint(x: 290, y: 118), size: 10, opacity: 0.22, drift: 14, duration: 5, delay: 0.4),
+        DistantBirdSpec(position: CGPoint(x: 140, y: 490), size: 12, opacity: 0.25, drift: 16, duration: 7, delay: 0.8)
+    ]
 
     private var skyBackdrop: some View {
         ZStack {
-            LinearGradient(colors: [Self.skyTop, Self.skyBottom], startPoint: .top, endPoint: .bottom)
+            LinearGradient(
+                colors: [Self.skyHighlight, Self.skyTop, Self.skyBottom],
+                startPoint: .top, endPoint: .bottom
+            )
 
-            CloudShape().fill(Self.cloudColor)
-                .frame(width: 130, height: 55)
-                .position(x: 90, y: 150)
-            CloudShape().fill(Self.cloudColor)
-                .frame(width: 150, height: 60)
-                .position(x: 330, y: 300)
-            CloudShape().fill(Self.cloudColor)
-                .frame(width: 120, height: 50)
-                .position(x: 110, y: 470)
-
-            Circle().fill(Self.sunColor)
-                .frame(width: 90, height: 90)
+            sunGlow
                 .position(x: 320, y: 400)
 
-            VStack {
-                Spacer()
-                treeLine
+            ForEach(Self.distantBirds) { bird in
+                DriftingSprite(position: bird.position, driftRange: bird.drift, duration: bird.duration, delay: bird.delay) {
+                    BirdShape()
+                        .fill(Color.white.opacity(bird.opacity))
+                        .frame(width: bird.size, height: bird.size * 0.9)
+                        .rotationEffect(.degrees(90))
+                }
             }
+
+            ForEach(Self.clouds) { cloud in
+                DriftingSprite(position: cloud.position, driftRange: cloud.drift, duration: cloud.duration, delay: cloud.delay) {
+                    CloudShape()
+                        .fill(Self.cloudColor.opacity(cloud.opacity))
+                        .frame(width: cloud.width, height: cloud.height)
+                }
+            }
+
+            VStack(spacing: 0) {
+                Spacer()
+                farHills
+                nearHills.offset(y: -18)
+                treeLine.offset(y: -30)
+            }
+
+            grainOverlay
         }
         .ignoresSafeArea()
+    }
+
+    private var sunGlow: some View {
+        ZStack {
+            Circle()
+                .fill(RadialGradient(colors: [Self.sunColor.opacity(0.5), .clear], center: .center, startRadius: 8, endRadius: 95))
+                .frame(width: 190, height: 190)
+            Circle()
+                .fill(Self.sunColor)
+                .frame(width: 90, height: 90)
+        }
+    }
+
+    private var farHills: some View {
+        MigrationHillShape()
+            .fill(Self.farHillColor)
+            .frame(height: 100)
+            .frame(maxWidth: .infinity)
+    }
+
+    private var nearHills: some View {
+        MigrationHillShape()
+            .fill(Self.nearHillColor)
+            .frame(height: 78)
+            .frame(maxWidth: .infinity)
     }
 
     private var treeLine: some View {
@@ -96,6 +176,23 @@ struct LostInMigrationView: View {
                     .offset(y: (i % 2 == 0 ? 4 : -4))
             }
         }
+    }
+
+    /// Very faint static dot texture, seeded so it doesn't re-randomize
+    /// (and thus flicker) on every redraw — a light nod to the paper
+    /// texture in the reference screenshot without any real cost.
+    private var grainOverlay: some View {
+        Canvas { context, size in
+            var rng = SeededGenerator(seed: 42)
+            for _ in 0..<140 {
+                let x = CGFloat.random(in: 0...size.width, using: &rng)
+                let y = CGFloat.random(in: 0...size.height, using: &rng)
+                let r = CGFloat.random(in: 0.5...1.4, using: &rng)
+                context.fill(Path(ellipseIn: CGRect(x: x, y: y, width: r, height: r)), with: .color(.white.opacity(0.05)))
+            }
+        }
+        .allowsHitTesting(false)
+        .blendMode(.overlay)
     }
 
     // MARK: Header

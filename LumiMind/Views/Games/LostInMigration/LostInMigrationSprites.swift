@@ -130,7 +130,83 @@ struct CloudShape: Shape {
     }
 }
 
-// MARK: TreeSilhouette
+// MARK: MigrationHillShape
+//
+// A single smooth rolling hill, filled with a translucent color and
+// layered twice (far + near, different colors/heights) behind the
+// tree line to add depth to the backdrop.
+
+struct MigrationHillShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let w = rect.width, h = rect.height
+        path.move(to: CGPoint(x: 0, y: h))
+        path.addLine(to: CGPoint(x: 0, y: h * 0.55))
+        path.addCurve(
+            to: CGPoint(x: w * 0.5, y: h * 0.35),
+            control1: CGPoint(x: w * 0.2, y: h * 0.25),
+            control2: CGPoint(x: w * 0.35, y: h * 0.5)
+        )
+        path.addCurve(
+            to: CGPoint(x: w, y: h * 0.5),
+            control1: CGPoint(x: w * 0.7, y: h * 0.2),
+            control2: CGPoint(x: w * 0.85, y: h * 0.42)
+        )
+        path.addLine(to: CGPoint(x: w, y: h))
+        path.closeSubpath()
+        return path
+    }
+}
+
+// MARK: SeededGenerator
+//
+// Deterministic RNG so decorative elements (e.g. the paper-grain
+// texture) render the same dot pattern on every redraw instead of
+// flickering with a new random layout each frame.
+
+struct SeededGenerator: RandomNumberGenerator {
+    private var state: UInt64
+    init(seed: UInt64) { self.state = seed == 0 ? 1 : seed }
+    mutating func next() -> UInt64 {
+        state = state &* 6364136223846793005 &+ 1442695040888963407
+        return state
+    }
+}
+
+// MARK: DriftingSprite
+//
+// Generic wrapper that gives any decorative content a slow, gentle
+// back-and-forth horizontal drift — used for both background clouds
+// and the faint distant migrating birds so the sky feels alive
+// without any gameplay-relevant motion. Respects reduced-motion.
+
+struct DriftingSprite<Content: View>: View {
+    let position: CGPoint
+    let driftRange: CGFloat
+    let duration: Double
+    let delay: Double
+    @ViewBuilder let content: () -> Content
+
+    @State private var drifted = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        content()
+            .position(position)
+            .offset(x: (reduceMotion ? 0 : drifted ? driftRange : -driftRange))
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(
+                    Animation.easeInOut(duration: duration)
+                        .repeatForever(autoreverses: true)
+                        .delay(delay)
+                ) {
+                    drifted = true
+                }
+            }
+    }
+}
+// MARK: MigrationTreeSilhouette
 //
 // Simple stacked-triangle pine, used for the ground line along the
 // bottom of the sky backdrop.

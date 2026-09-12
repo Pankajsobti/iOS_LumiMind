@@ -140,15 +140,15 @@ struct LostInMigrationView: View {
     private var formation: some View {
         ZStack {
             ForEach(viewModel.currentTrial.birds) { bird in
-                BirdShape()
-                    .fill(Color(hex: "#1B2B34"))
-                    .frame(width: Self.birdSize, height: Self.birdSize)
-                    .rotationEffect(.degrees(bird.direction.rotationDegrees))
-                    .scaleEffect(bird.isTarget ? 1.0 : 0.92)
-                    .offset(
-                        x: CGFloat(bird.slot.offset.x) * Self.birdSpacing,
-                        y: CGFloat(bird.slot.offset.y) * Self.birdSpacing
-                    )
+                BirdSprite(
+                    isTarget: bird.isTarget,
+                    heading: bird.direction.rotationDegrees,
+                    size: bird.isTarget ? Self.birdSize : Self.birdSize * 0.88
+                )
+                .offset(
+                    x: CGFloat(bird.slot.offset.x) * Self.birdSpacing,
+                    y: CGFloat(bird.slot.offset.y) * Self.birdSpacing
+                )
             }
         }
         .frame(height: Self.birdSpacing * 2 + Self.birdSize)

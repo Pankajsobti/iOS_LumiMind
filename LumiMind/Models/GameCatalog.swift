@@ -85,11 +85,11 @@ enum GameCatalog {
             customImageName: "pirate",
             shortDescription: "Plan a route through shifting obstacles.",
             rules: [
-                "Guide the ship from start to the treasure.",
-                "Plan your route around rocks and obstacles.",
-                "Fewer moves earns a better score.",
-                "Think a few steps ahead before moving."
-            ],
+    "Guide the ship from start to the treasure.",
+    "Plan your full route before you move — tap tiles to build the path.",
+    "Watch each pirate's patrol route and time your path around them.",
+    "Fewer moves earns a better score, with a bonus for the optimal path."
+],
             scienceExplainer: "Pirate Passage strengthens planning and problem-solving — mapping out several moves ahead before acting. This kind of forward-thinking relies on executive function circuits that also support everyday decisions like budgeting time or navigating a new route.",
             isLocked: true
         ),

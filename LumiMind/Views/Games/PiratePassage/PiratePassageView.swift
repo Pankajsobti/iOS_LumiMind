@@ -3,10 +3,10 @@ import SwiftUI
 // MARK: - PiratePassageView
 //
 // Presentational only — renders whatever PiratePassageViewModel
-// reports and forwards taps into `tapTile(at:)`. Same structure as the
-// other four games: header uses the category gradient, finished
-// overlay shows score with a Continue button that calls onComplete
-// (caller routes to ScienceExplainerView).
+// reports. The board is a GeometryReader-sized square so ship/pirate
+// markers, the dashed planned-path line, and the faint patrol-route
+// previews can all be positioned with pixel-accurate `.position()`
+// on top of the LazyVGrid tile layer.
 
 struct PiratePassageView: View {
     @StateObject private var viewModel: PiratePassageViewModel
@@ -17,10 +17,6 @@ struct PiratePassageView: View {
         self.onComplete = onComplete
     }
 
-    private var columns: [GridItem] {
-        Array(repeating: GridItem(.flexible(), spacing: 4), count: viewModel.gridSize)
-    }
-
     var body: some View {
         ZStack {
             DesignSystem.backgroundMain.ignoresSafeArea()
@@ -28,20 +24,21 @@ struct PiratePassageView: View {
             VStack(spacing: DesignSystem.Spacing.md) {
                 header
 
-                grid
+                board
                     .padding(.horizontal, DesignSystem.Spacing.md)
 
-                feedbackLabel
-                    .frame(height: 22)
+                hintRow
 
-                resetButton
-
-                Spacer()
+                controls
             }
             .padding(.top, DesignSystem.Spacing.lg)
 
             if case .submitting = viewModel.phase {
                 statusOverlay(message: "Saving your result…")
+            }
+
+            if case .levelResult(let result) = viewModel.phase {
+                resultOverlay(result)
             }
 
             if case .finished(let score) = viewModel.phase {
@@ -50,26 +47,40 @@ struct PiratePassageView: View {
         }
     }
 
-    // MARK: Header
+    // MARK: Header — Level / Trial / Score, per spec's top-bar layout
 
     private var header: some View {
-        VStack(spacing: DesignSystem.Spacing.sm) {
-            HStack {
-                Text("Pirate Passage")
-                    .font(DesignSystem.title2)
-                    .foregroundColor(.white)
-                Spacer()
-                Text("Level \(min(viewModel.levelIndex + 1, PiratePassageViewModel.totalLevels))/\(PiratePassageViewModel.totalLevels)")
-                    .font(DesignSystem.roundedFont(size: 15, weight: .semibold))
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("LEVEL")
+                    .font(DesignSystem.caption)
+                    .foregroundColor(.white.opacity(0.75))
+                Text("\(min(viewModel.levelIndex + 1, PiratePassageViewModel.totalLevels)) / \(PiratePassageViewModel.totalLevels)")
+                    .font(DesignSystem.roundedFont(size: 17, weight: .bold))
                     .foregroundColor(.white)
             }
-            HStack {
-                Text("Moves: \(viewModel.movesUsed)")
-                    .font(DesignSystem.subheadline)
-                    .foregroundColor(.white.opacity(0.85))
-                Spacer()
+
+            Spacer()
+
+            VStack(spacing: 2) {
+                Text("TRIAL")
+                    .font(DesignSystem.caption)
+                    .foregroundColor(.white.opacity(0.75))
+                Text("\(viewModel.attempt) of 2")
+                    .font(DesignSystem.roundedFont(size: 17, weight: .bold))
+                    .foregroundColor(.white)
             }
-            ProgressBar(fraction: viewModel.timeRemainingFraction)
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("SCORE")
+                    .font(DesignSystem.caption)
+                    .foregroundColor(.white.opacity(0.75))
+                Text("\(viewModel.runningScore)")
+                    .font(DesignSystem.roundedFont(size: 17, weight: .bold))
+                    .foregroundColor(.white)
+            }
         }
         .padding(DesignSystem.Spacing.md)
         .background(DesignSystem.problemSolvingGradient)
@@ -77,74 +88,226 @@ struct PiratePassageView: View {
         .padding(.horizontal, DesignSystem.Spacing.md)
     }
 
-    // MARK: Grid
+    // MARK: Board
 
-    private var grid: some View {
-        LazyVGrid(columns: columns, spacing: 4) {
-            ForEach(viewModel.cells) { cell in
+    private var board: some View {
+        GeometryReader { geo in
+            let size = min(geo.size.width, geo.size.height)
+            let cell = size / CGFloat(max(viewModel.cols, viewModel.rows))
+
+            ZStack {
+                // Ocean board backdrop
+                RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact)
+                    .fill(Color(hex: "#5EEAD4").opacity(0.14))
+
+                tileLayer(cell: cell)
+                patrolRoutePreviewLayer(cell: cell)
+                hintLayer(cell: cell)
+                plannedPathLayer(cell: cell)
+                pirateLayer(cell: cell)
+                shipLayer(cell: cell)
+            }
+            .frame(width: size, height: size)
+            .position(x: geo.size.width / 2, y: geo.size.height / 2)
+        }
+        .aspectRatio(1, contentMode: .fit)
+    }
+
+    private var columns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: 3), count: viewModel.cols)
+    }
+
+    private func tileLayer(cell: CGFloat) -> some View {
+        LazyVGrid(columns: columns, spacing: 3) {
+            ForEach(viewModel.cells) { gridCell in
                 Button {
-                    viewModel.tapTile(at: cell.position)
+                    viewModel.tapTile(at: gridCell.position)
                 } label: {
                     RoundedRectangle(cornerRadius: 6)
-                        .fill(fillColor(for: cell))
+                        .fill(tileFill(for: gridCell))
                         .aspectRatio(1, contentMode: .fit)
                         .overlay {
-                            if cell.isStart {
-                                Image(systemName: "figure.walk")
-                                    .foregroundColor(.white)
-                            } else if cell.isEnd {
-                                Image(systemName: "star.fill")
-                                    .foregroundColor(.white)
-                            } else if cell.isObstacle {
-                                Image(systemName: "xmark")
-                                    .foregroundColor(.white.opacity(0.5))
-                                    .font(.system(size: 10))
+                            if gridCell.isObstacle {
+                                Image(systemName: "mountain.2.fill")
+                                    .font(.system(size: cell * 0.32))
+                                    .foregroundColor(DesignSystem.backgroundOnboarding.opacity(0.55))
+                            } else if gridCell.isEnd {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: cell * 0.4))
+                                    .foregroundColor(Color(hex: "#F5A623"))
                             }
                         }
                 }
                 .buttonStyle(.plain)
-                .disabled(viewModel.phase != .playing || viewModel.isTransitioning)
+                .disabled(viewModel.phase != .planning)
             }
         }
-        .animation(.easeOut(duration: 0.15), value: viewModel.currentPath)
     }
 
-    private func fillColor(for cell: PiratePassageViewModel.GridCell) -> Color {
+    private func tileFill(for cell: PiratePassageViewModel.GridCell) -> Color {
         if cell.isObstacle {
-            return DesignSystem.backgroundOnboarding.opacity(0.85)
+            return DesignSystem.backgroundOnboarding.opacity(0.18)
         }
-        if viewModel.currentPath.contains(cell.position) {
-            return Color(hex: "#4A7BFF")
+        return Color(hex: "#5EEAD4").opacity(0.22)
+    }
+
+    /// Faint, color-coded preview of each pirate's patrol shape so the
+    /// player can study routes before committing to a plan.
+    private func patrolRoutePreviewLayer(cell: CGFloat) -> some View {
+        Canvas { context, _ in
+            for pirate in viewModel.pirates {
+                var path = Path()
+                for (index, position) in pirate.cells.enumerated() {
+                    let point = center(for: position, cell: cell)
+                    if index == 0 { path.move(to: point) } else { path.addLine(to: point) }
+                }
+                context.stroke(
+                    path,
+                    with: .color(Color(hex: pirate.colorHex).opacity(0.35)),
+                    style: StrokeStyle(lineWidth: 2, dash: [3, 4])
+                )
+            }
         }
-        return DesignSystem.backgroundOnboarding.opacity(0.08)
+        .allowsHitTesting(false)
     }
 
     @ViewBuilder
-    private var feedbackLabel: some View {
-        if let succeeded = viewModel.lastLevelSucceeded {
-            Text(succeeded ? "Treasure found!" : "Time's up — next level")
-                .font(DesignSystem.headline)
-                .foregroundColor(succeeded ? Color(hex: "#2ECC71") : Color(hex: "#FF6B4A"))
-        } else {
-            Text(" ")
-                .font(DesignSystem.headline)
+    private func hintLayer(cell: CGFloat) -> some View {
+        if let hintPath = viewModel.hintPath {
+            Canvas { context, _ in
+                var path = Path()
+                for (index, position) in hintPath.enumerated() {
+                    let point = center(for: position, cell: cell)
+                    if index == 0 { path.move(to: point) } else { path.addLine(to: point) }
+                }
+                context.stroke(
+                    path,
+                    with: .color(Color(hex: "#F5A623").opacity(0.8)),
+                    style: StrokeStyle(lineWidth: 3, dash: [2, 5])
+                )
+            }
+            .allowsHitTesting(false)
         }
     }
 
-    private var resetButton: some View {
-        Button {
-            viewModel.resetPath()
-        } label: {
-            Text("Reset Path")
-                .font(DesignSystem.subheadline)
-                .foregroundColor(DesignSystem.backgroundOnboarding)
-                .padding(.horizontal, DesignSystem.Spacing.md)
-                .padding(.vertical, DesignSystem.Spacing.xs)
+    private func plannedPathLayer(cell: CGFloat) -> some View {
+        Canvas { context, _ in
+            guard viewModel.currentPath.count > 1 else { return }
+            var path = Path()
+            for (index, position) in viewModel.currentPath.enumerated() {
+                let point = center(for: position, cell: cell)
+                if index == 0 { path.move(to: point) } else { path.addLine(to: point) }
+            }
+            context.stroke(
+                path,
+                with: .color(.white),
+                style: StrokeStyle(lineWidth: 4, lineCap: .round, dash: [1, 9])
+            )
+            context.stroke(
+                path,
+                with: .color(DesignSystem.backgroundOnboarding.opacity(0.5)),
+                style: StrokeStyle(lineWidth: 6, lineCap: .round, dash: [1, 9])
+            )
         }
-        .buttonStyle(.plain)
-        .background(DesignSystem.backgroundOnboarding.opacity(0.08))
-        .clipShape(Capsule())
-        .disabled(viewModel.phase != .playing || viewModel.isTransitioning)
+        .allowsHitTesting(false)
+        .animation(.easeOut(duration: 0.15), value: viewModel.currentPath)
+    }
+
+    private func pirateLayer(cell: CGFloat) -> some View {
+        ForEach(viewModel.pirates) { pirate in
+            let position = animatedPosition(for: pirate)
+            Image(systemName: "sailboat.fill")
+                .font(.system(size: cell * 0.42))
+                .foregroundColor(Color(hex: pirate.colorHex))
+                .rotationEffect(.degrees(180))
+                .position(center(for: position, cell: cell))
+                .animation(.easeInOut(duration: 0.45), value: position)
+        }
+    }
+
+    private func animatedPosition(for pirate: PiratePassageViewModel.Patrol) -> PiratePassageViewModel.Position {
+        if viewModel.phase == .executing || isLevelResultPhase {
+            let index = viewModel.pirates.firstIndex(where: { $0.id == pirate.id }) ?? 0
+            if index < viewModel.animatedPiratePositions.count {
+                return viewModel.animatedPiratePositions[index]
+            }
+        }
+        return pirate.position(atTick: 0)
+    }
+
+    private var isLevelResultPhase: Bool {
+        if case .levelResult = viewModel.phase { return true }
+        return false
+    }
+
+    private func shipLayer(cell: CGFloat) -> some View {
+        let shipPosition = (viewModel.phase == .executing || isLevelResultPhase)
+            ? viewModel.animatedShipPosition
+            : (viewModel.currentPath.first ?? PiratePassageViewModel.Position(row: 0, col: 0))
+        return Image(systemName: "sailboat.fill")
+            .font(.system(size: cell * 0.48))
+            .foregroundColor(Color(hex: "#FFB347"))
+            .position(center(for: shipPosition, cell: cell))
+            .animation(.easeInOut(duration: 0.45), value: shipPosition)
+    }
+
+    private func center(for position: PiratePassageViewModel.Position, cell: CGFloat) -> CGPoint {
+        CGPoint(x: (CGFloat(position.col) + 0.5) * cell, y: (CGFloat(position.row) + 0.5) * cell)
+    }
+
+    // MARK: Hint
+
+    private var hintRow: some View {
+        HStack {
+            Spacer()
+            Button {
+                viewModel.requestHint()
+            } label: {
+                Label("Need a hint?", systemImage: "lightbulb.fill")
+                    .font(DesignSystem.caption)
+                    .foregroundColor(DesignSystem.backgroundOnboarding.opacity(0.7))
+            }
+            .buttonStyle(.plain)
+            .disabled(viewModel.phase != .planning || viewModel.hintPath != nil)
+            .opacity(viewModel.hintPath == nil ? 1 : 0.4)
+        }
+        .padding(.horizontal, DesignSystem.Spacing.lg)
+    }
+
+    // MARK: Bottom controls — UNDO / GO
+
+    private var controls: some View {
+        HStack(spacing: DesignSystem.Spacing.md) {
+            Button {
+                viewModel.undo()
+            } label: {
+                Text("UNDO")
+                    .font(DesignSystem.buttonLabel)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, DesignSystem.Spacing.md)
+            }
+            .buttonStyle(.plain)
+            .background(DesignSystem.backgroundOnboarding.opacity(viewModel.canUndo ? 1 : 0.35))
+            .clipShape(Capsule())
+            .disabled(!viewModel.canUndo)
+
+            Button {
+                viewModel.go()
+            } label: {
+                Text("GO")
+                    .font(DesignSystem.buttonLabel)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, DesignSystem.Spacing.md)
+            }
+            .buttonStyle(.plain)
+            .background(viewModel.canGo ? AnyShapeStyle(DesignSystem.primaryGradient) : AnyShapeStyle(DesignSystem.backgroundOnboarding.opacity(0.35)))
+            .clipShape(Capsule())
+            .disabled(!viewModel.canGo)
+        }
+        .padding(.horizontal, DesignSystem.Spacing.lg)
+        .padding(.bottom, DesignSystem.Spacing.lg)
     }
 
     // MARK: Overlays
@@ -161,6 +324,77 @@ struct PiratePassageView: View {
             .padding(DesignSystem.Spacing.lg)
             .background(DesignSystem.backgroundOnboarding)
             .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius))
+        }
+    }
+
+    private func resultOverlay(_ result: PiratePassageViewModel.LevelResult) -> some View {
+        ZStack {
+            DesignSystem.backgroundOnboarding.opacity(0.55).ignoresSafeArea()
+
+            VStack(spacing: DesignSystem.Spacing.sm) {
+                Image(systemName: result.success ? "star.circle.fill" : "exclamationmark.triangle.fill")
+                    .font(.system(size: 40))
+                    .foregroundColor(result.success ? Color(hex: "#2ECC71") : Color(hex: "#FF6B4A"))
+
+                Text(result.success ? "Treasure Found!" : "Caught by a Pirate!")
+                    .font(DesignSystem.title2)
+                    .foregroundColor(DesignSystem.backgroundMain)
+
+                if let reason = result.collisionReason {
+                    Text(reason)
+                        .font(DesignSystem.caption)
+                        .foregroundColor(DesignSystem.backgroundMain.opacity(0.75))
+                        .multilineTextAlignment(.center)
+                }
+
+                if result.success {
+                    VStack(spacing: 4) {
+                        summaryRow(label: "Moves used", value: "\(result.movesUsed)")
+                        summaryRow(label: "Optimal moves", value: "\(result.optimalMoves)")
+                        summaryRow(label: "Bonus", value: result.bonus > 0 ? "+\(result.bonus)" : "—")
+                        summaryRow(label: "Level score", value: "\(result.levelScore)")
+                    }
+                    .padding(.vertical, DesignSystem.Spacing.sm)
+                } else if result.attempt >= 2 {
+                    Text("Second-attempt levels score at a reduced rate.")
+                        .font(DesignSystem.caption)
+                        .foregroundColor(DesignSystem.backgroundMain.opacity(0.6))
+                }
+
+                Button {
+                    if result.success {
+                        viewModel.advanceToNextLevel()
+                    } else {
+                        viewModel.retryLevel()
+                    }
+                } label: {
+                    Text(result.success ? "Continue" : "Retry")
+                        .font(DesignSystem.buttonLabel)
+                        .foregroundColor(DesignSystem.backgroundMain)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, DesignSystem.Spacing.md)
+                }
+                .buttonStyle(.plain)
+                .background(DesignSystem.primaryGradient)
+                .clipShape(Capsule())
+                .padding(.top, DesignSystem.Spacing.sm)
+            }
+            .padding(DesignSystem.Spacing.lg)
+            .frame(maxWidth: 320)
+            .background(DesignSystem.backgroundOnboarding)
+            .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius))
+        }
+    }
+
+    private func summaryRow(label: String, value: String) -> some View {
+        HStack {
+            Text(label)
+                .font(DesignSystem.subheadline)
+                .foregroundColor(DesignSystem.backgroundMain.opacity(0.7))
+            Spacer()
+            Text(value)
+                .font(DesignSystem.roundedFont(size: 15, weight: .semibold))
+                .foregroundColor(DesignSystem.backgroundMain)
         }
     }
 
@@ -201,23 +435,6 @@ struct PiratePassageView: View {
             .background(DesignSystem.backgroundOnboarding)
             .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius))
         }
-    }
-}
-
-// MARK: - ProgressBar
-
-private struct ProgressBar: View {
-    let fraction: Double
-
-    var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule().fill(.white.opacity(0.3))
-                Capsule().fill(.white)
-                    .frame(width: geo.size.width * max(0, min(1, fraction)))
-            }
-        }
-        .frame(height: 6)
     }
 }
 

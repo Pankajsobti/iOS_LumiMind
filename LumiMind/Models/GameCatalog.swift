@@ -125,6 +125,24 @@ enum GameCatalog {
             scienceExplainer: "Train of Thought trains divided attention — tracking several independent moving objects at once and acting on the right one at the right time. This is the same skill you use merging into traffic while watching multiple cars, and it's directly trainable through repeated practice.",
             isLocked: true
         ),
+
+
+        Game(
+            id: "flow_switch",
+            name: "Flow Switch",
+            category: .flexibility,
+            iconName: "leaf.fill",
+            shortDescription: "Follow the color's rule as leaves point one way and drift another.",
+            rules: [
+                "Green leaves: respond to which way they're pointing.",
+                "Orange leaves: respond to which way they're drifting.",
+                "The two directions won't always match — ignore the wrong one.",
+                "The rule can switch color at any moment, so stay sharp."
+            ],
+            scienceExplainer: "Flow Switch trains cognitive flexibility and inhibitory control together: you must suppress an irrelevant direction cue while following the one your current rule calls for, then re-orient the moment the rule switches. This tug-of-war between competing signals mirrors everyday task-switching, like glancing at a text while driving and having to redirect attention instantly.",
+            isLocked: true
+        ),
+
     ]
 }
 

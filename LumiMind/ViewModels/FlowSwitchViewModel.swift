@@ -301,17 +301,6 @@ final class FlowSwitchViewModel: ObservableObject {
         lastAnswerFeedback = nil
         trialStartedAt = now
 
-        trialTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(profile.responseWindow * 1_000_000_000))
-            guard let self, !Task.isCancelled else { return }
-            self.handleTimeout()
-        }
-    }
-
-    private func handleTimeout() {
-        guard phase == .playing, !responseLocked else { return }
-        responseLocked = true
-        processResult(isCorrect: false, wasMiss: true)
     }
 
     // MARK: - Responding

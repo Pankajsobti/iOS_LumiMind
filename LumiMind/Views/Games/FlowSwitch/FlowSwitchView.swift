@@ -5,12 +5,22 @@ import SwiftUI
 private struct LeafShape: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        let w = rect.width, h = rect.height
+        let w = rect.width, h = rect.height * 0.82
         path.move(to: CGPoint(x: w / 2, y: 0))
-        path.addQuadCurve(to: CGPoint(x: w, y: h * 0.65), control: CGPoint(x: w * 0.95, y: h * 0.15))
-        path.addQuadCurve(to: CGPoint(x: w / 2, y: h), control: CGPoint(x: w * 0.75, y: h * 0.95))
-        path.addQuadCurve(to: CGPoint(x: 0, y: h * 0.65), control: CGPoint(x: w * 0.25, y: h * 0.95))
-        path.addQuadCurve(to: CGPoint(x: w / 2, y: 0), control: CGPoint(x: w * 0.05, y: h * 0.15))
+        path.addQuadCurve(to: CGPoint(x: w, y: h * 0.55), control: CGPoint(x: w * 0.98, y: h * 0.1))
+        path.addQuadCurve(to: CGPoint(x: w / 2, y: h), control: CGPoint(x: w * 0.8, y: h * 0.98))
+        path.addQuadCurve(to: CGPoint(x: 0, y: h * 0.55), control: CGPoint(x: w * 0.2, y: h * 0.98))
+        path.addQuadCurve(to: CGPoint(x: w / 2, y: 0), control: CGPoint(x: w * 0.02, y: h * 0.1))
+        return path
+    }
+}
+
+private struct LeafVein: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let w = rect.width, h = rect.height
+        path.move(to: CGPoint(x: w / 2, y: h * 0.08))
+        path.addLine(to: CGPoint(x: w / 2, y: h * 0.98))
         return path
     }
 }
@@ -144,10 +154,11 @@ private var statBar: some View {
     let x = Self.wrapped(leaf.anchorX + CGFloat(viewModel.velocity.dx) * CGFloat(elapsed))
     let y = Self.wrapped(leaf.anchorY + CGFloat(viewModel.velocity.dy) * CGFloat(elapsed))
 
-    return LeafShape()
+        return LeafShape()
         .fill(viewModel.currentTrial.color.color)
-        .frame(width: 52, height: 68)
         .overlay(LeafShape().stroke(Color.white, lineWidth: 3))
+        .overlay(LeafVein().stroke(Color.white.opacity(0.5), lineWidth: 1.5))
+        .frame(width: 52, height: 68)
         .rotationEffect(.degrees(viewModel.currentTrial.pointing.rotationDegrees))
         .position(x: x * size.width, y: y * size.height)
         .transaction { $0.disablesAnimations = true }

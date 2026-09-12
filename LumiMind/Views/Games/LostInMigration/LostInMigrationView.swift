@@ -2,40 +2,39 @@ import SwiftUI
 
 // MARK: - LostInMigrationView
 //
-// Presentational only — renders whatever LostInMigrationViewModel
-// reports and forwards taps into `tapItem(at:)`. Same structure as
-// SpeedMatchView/MemoryMatrixView: header uses the category gradient,
-// finished overlay shows score with a Continue button that calls
-// onComplete (caller routes to ScienceExplainerView).
+// REWRITE to match the reference screenshot: a soft sky backdrop
+// (clouds, sun, tree-line — self-contained the same way
+// TrainOfThoughtView's forestBackdrop is scoped to that screen only),
+// a header with a pause glyph + TIME + SCORE, a plus-shaped bird
+// formation, and a swipe gesture over the whole board — the same
+// input pattern as FlowSwitchView's `leafField`. Purely
+// presentational: all gameplay state comes from
+// LostInMigrationViewModel, and swipes are forwarded into
+// `respond(_:)`.
 
 struct LostInMigrationView: View {
     @StateObject private var viewModel: LostInMigrationViewModel
     var onComplete: () -> Void
+
+    /// Spacing between adjacent birds in the formation, in points.
+    private static let birdSpacing: CGFloat = 64
+    private static let birdSize: CGFloat = 40
 
     init(gameResultViewModel: GameResultViewModel, isFitTest: Bool = false, onComplete: @escaping () -> Void) {
         _viewModel = StateObject(wrappedValue: LostInMigrationViewModel(gameResultViewModel: gameResultViewModel, isFitTest: isFitTest))
         self.onComplete = onComplete
     }
 
-    private var columns: [GridItem] {
-        Array(repeating: GridItem(.flexible(), spacing: DesignSystem.Spacing.sm), count: viewModel.gridColumns)
-    }
-
     var body: some View {
         ZStack {
-            DesignSystem.backgroundMain.ignoresSafeArea()
+            skyBackdrop
 
             VStack(spacing: DesignSystem.Spacing.lg) {
                 header
-
                 Spacer()
-
-                grid
-                    .padding(.horizontal, DesignSystem.Spacing.lg)
-
-                feedbackLabel
-                    .frame(height: 22)
-
+                formation
+                instructionCaption
+                Spacer()
                 Spacer()
             }
             .padding(.vertical, DesignSystem.Spacing.lg)
@@ -50,61 +49,142 @@ struct LostInMigrationView: View {
         }
     }
 
+    // MARK: Sky backdrop
+    //
+    // Self-contained palette scoped to this screen only, same
+    // pattern TrainOfThoughtView already uses for its forest — no
+    // new tokens added to DesignSystem.
+
+    private static let skyTop = Color(hex: "#8FD9DC")
+    private static let skyBottom = Color(hex: "#4FB8C4")
+    private static let cloudColor = Color.white.opacity(0.55)
+    private static let sunColor = Color.white.opacity(0.45)
+    private static let treeColor = Color(hex: "#3FA6AE").opacity(0.55)
+
+    private var skyBackdrop: some View {
+        ZStack {
+            LinearGradient(colors: [Self.skyTop, Self.skyBottom], startPoint: .top, endPoint: .bottom)
+
+            CloudShape().fill(Self.cloudColor)
+                .frame(width: 130, height: 55)
+                .position(x: 90, y: 150)
+            CloudShape().fill(Self.cloudColor)
+                .frame(width: 150, height: 60)
+                .position(x: 330, y: 300)
+            CloudShape().fill(Self.cloudColor)
+                .frame(width: 120, height: 50)
+                .position(x: 110, y: 470)
+
+            Circle().fill(Self.sunColor)
+                .frame(width: 90, height: 90)
+                .position(x: 320, y: 400)
+
+            VStack {
+                Spacer()
+                treeLine
+            }
+        }
+        .ignoresSafeArea()
+    }
+
+    private var treeLine: some View {
+        HStack(spacing: -10) {
+            ForEach(0..<9, id: \.self) { i in
+                MigrationTreeSilhouette()
+                    .fill(Self.treeColor)
+                    .frame(width: 44, height: 66)
+                    .offset(y: (i % 2 == 0 ? 4 : -4))
+            }
+        }
+    }
+
     // MARK: Header
 
     private var header: some View {
-        VStack(spacing: DesignSystem.Spacing.sm) {
-            HStack {
-                Text("Lost in Migration")
-                    .font(DesignSystem.title2)
+        HStack(spacing: DesignSystem.Spacing.md) {
+            Button(action: { /* pause owned by caller / navigation */ }) {
+                Image(systemName: "pause.fill")
+                    .font(.system(size: 15, weight: .bold))
                     .foregroundColor(.white)
-                Spacer()
-                Text("\(min(viewModel.currentRoundIndex + 1, LostInMigrationViewModel.totalRounds))/\(LostInMigrationViewModel.totalRounds)")
-                    .font(DesignSystem.roundedFont(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
+                    .frame(width: 36, height: 36)
+                    .background(Color.white.opacity(0.18))
+                    .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact))
             }
-            ProgressBar(fraction: viewModel.timeRemainingFraction)
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            statPill(label: "TIME", value: viewModel.timeRemainingLabel)
+            statPill(label: "SCORE", value: "\(viewModel.score)")
         }
-        .padding(DesignSystem.Spacing.md)
-        .background(DesignSystem.attentionGradient)
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius))
         .padding(.horizontal, DesignSystem.Spacing.md)
     }
 
-    // MARK: Grid
-
-    private var grid: some View {
-        LazyVGrid(columns: columns, spacing: DesignSystem.Spacing.sm) {
-            ForEach(viewModel.items) { item in
-                Button {
-                    viewModel.tapItem(at: item.id)
-                } label: {
-                    RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact)
-                        .fill(DesignSystem.attentionGradient.opacity(0.15))
-                        .aspectRatio(1, contentMode: .fit)
-                        .overlay {
-                            Image(systemName: "arrow.up")
-                                .font(.system(size: 22, weight: .bold))
-                                .foregroundColor(DesignSystem.backgroundOnboarding)
-                                .rotationEffect(.degrees(item.rotationDegrees))
-                        }
-                }
-                .buttonStyle(.plain)
-            }
+    private func statPill(label: String, value: String) -> some View {
+        HStack(spacing: 6) {
+            Text(label)
+                .font(DesignSystem.roundedFont(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.75))
+            Text(value)
+                .font(DesignSystem.roundedFont(size: 16, weight: .bold))
+                .foregroundColor(.white)
         }
-        .disabled(viewModel.phase != .playing)
-        .animation(.easeOut(duration: 0.15), value: viewModel.items)
+        .padding(.horizontal, DesignSystem.Spacing.md)
+        .padding(.vertical, DesignSystem.Spacing.xs)
+        .background(Color.white.opacity(0.18))
+        .clipShape(Capsule())
     }
 
+    // MARK: Formation
+
+    private var formation: some View {
+        ZStack {
+            ForEach(viewModel.currentTrial.birds) { bird in
+                BirdShape()
+                    .fill(Color(hex: "#1B2B34"))
+                    .frame(width: Self.birdSize, height: Self.birdSize)
+                    .rotationEffect(.degrees(bird.direction.rotationDegrees))
+                    .scaleEffect(bird.isTarget ? 1.0 : 0.92)
+                    .offset(
+                        x: CGFloat(bird.slot.offset.x) * Self.birdSpacing,
+                        y: CGFloat(bird.slot.offset.y) * Self.birdSpacing
+                    )
+            }
+        }
+        .frame(height: Self.birdSpacing * 2 + Self.birdSize)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 16)
+                .onEnded { value in
+                    viewModel.respond(Self.direction(for: value.translation))
+                }
+        )
+        .allowsHitTesting(viewModel.phase == .playing)
+        .animation(.easeOut(duration: 0.12), value: viewModel.currentTrial.birds)
+    }
+
+    private static func direction(for translation: CGSize) -> LostInMigrationViewModel.Direction {
+        if abs(translation.width) > abs(translation.height) {
+            return translation.width > 0 ? .right : .left
+        } else {
+            return translation.height > 0 ? .down : .up
+        }
+    }
+
+    // MARK: Instruction / feedback
+
     @ViewBuilder
-    private var feedbackLabel: some View {
+    private var instructionCaption: some View {
         if let correct = viewModel.lastAnswerWasCorrect {
-            Text(correct ? "Spotted it!" : "Missed it")
+            Text(correct ? "Nice!" : "Not quite")
                 .font(DesignSystem.headline)
                 .foregroundColor(correct ? Color(hex: "#2ECC71") : Color(hex: "#FF6B4A"))
         } else {
-            Text(" ")
-                .font(DesignSystem.headline)
+            Text("Swipe in the direction of the middle bird")
+                .font(DesignSystem.subheadline)
+                .foregroundColor(.white.opacity(0.9))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, DesignSystem.Spacing.xl)
         }
     }
 
@@ -162,23 +242,6 @@ struct LostInMigrationView: View {
             .background(DesignSystem.backgroundOnboarding)
             .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius))
         }
-    }
-}
-
-// MARK: - ProgressBar
-
-private struct ProgressBar: View {
-    let fraction: Double
-
-    var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule().fill(.white.opacity(0.3))
-                Capsule().fill(.white)
-                    .frame(width: geo.size.width * max(0, min(1, fraction)))
-            }
-        }
-        .frame(height: 6)
     }
 }
 

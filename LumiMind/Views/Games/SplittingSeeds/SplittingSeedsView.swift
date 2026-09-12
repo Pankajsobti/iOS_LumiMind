@@ -10,13 +10,25 @@
 //  simulating the stick physically pushing seeds aside — then springs
 //  back once the stick passes. Purely visual; does not affect gameplay.
 //
-//  This revision layers in a richer forest arena, a wood-grain stick
-//  with tip caps and a drag glow, glossy seeds with idle wobble, a
-//  "ready to lock" glow once the current split matches the target, a
-//  confetti burst on correct answers, a level-up celebration banner,
-//  and glassmorphism-styled HUD cards. Nothing here changes scoring —
-//  every visual effect reads from the ViewModel's existing published
-//  state (or from purely local @State), never writes gameplay truth.
+//  REVISION (background pass): previously the forest art was trapped
+//  inside a small bordered card floating on a plain dark backdrop,
+//  which looked inconsistent with the other games (LostInMigration,
+//  TrainOfThought) where the scene fills the whole screen. This
+//  revision makes the forest scene the full-bleed background
+//  (`ForestBackdrop`, `.ignoresSafeArea()`) — branches + birds in the
+//  corners, scattered leaf/acorn texture, soft vignette — with the
+//  HUD as translucent glass pills floating on top, mirroring
+//  LostInMigrationView's `statPill` treatment. The seeds/stick play
+//  area no longer sits inside its own bordered card; it sits directly
+//  on the backdrop. Nothing about scoring, targets, or drag handling
+//  changed — every visual effect still reads from the ViewModel's
+//  existing published state (or purely local @State).
+//
+//  ASSUMPTION (flagging per project convention): added a pause button
+//  in the header to match LostInMigrationView's header (it wasn't in
+//  the original SplittingSeedsView). Wired as a no-op placeholder the
+//  same way LostInMigrationView does ("pause owned by caller /
+//  navigation") — flag if you want it removed or wired differently.
 //
 
 import SwiftUI
@@ -50,7 +62,7 @@ struct SplittingSeedsView: View {
 
     var body: some View {
         ZStack {
-            AmbientBackdrop(phase: ambientPhase)
+            ForestBackdrop(phase: ambientPhase)
                 .ignoresSafeArea()
 
             VStack(spacing: DesignSystem.Spacing.md) {
@@ -84,7 +96,7 @@ struct SplittingSeedsView: View {
             withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
                 pivotPulse = true
             }
-            withAnimation(.linear(duration: 9).repeatForever(autoreverses: false)) {
+            withAnimation(.linear(duration: 14).repeatForever(autoreverses: false)) {
                 ambientPhase = 1
             }
             scoreDisplay = viewModel.score
@@ -115,61 +127,78 @@ struct SplittingSeedsView: View {
         }
     }
 
-    // MARK: Header (TIME / SCORE / LEVEL + pips)
+    // MARK: Header (pause + TIME / SCORE / LEVEL + pips, glass style)
 
     private var header: some View {
-        HStack(alignment: .center) {
-            hudItem(icon: "clock.fill", label: "TIME", value: formattedTime)
+        HStack(alignment: .center, spacing: DesignSystem.Spacing.sm) {
+            pauseButton
 
-            Spacer(minLength: 4)
+            HStack(alignment: .center, spacing: DesignSystem.Spacing.md) {
+                hudItem(icon: "clock.fill", label: "TIME", value: formattedTime)
 
-            VStack(spacing: 2) {
-                Text("\(scoreDisplay)")
-                    .font(DesignSystem.roundedFont(size: 26, weight: .bold))
-                    .foregroundColor(.white)
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
-                Text("SCORE")
-                    .font(DesignSystem.roundedFont(size: 11, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.75))
-                    .tracking(1)
-            }
+                Spacer(minLength: 4)
 
-            Spacer(minLength: 4)
-
-            VStack(alignment: .trailing, spacing: DesignSystem.Spacing.xxs) {
-                HStack(spacing: 4) {
-                    Image(systemName: "flag.fill")
-                        .font(.system(size: 11))
-                    Text("LEVEL \(viewModel.level)")
-                        .font(DesignSystem.roundedFont(size: 13, weight: .semibold))
+                VStack(spacing: 2) {
+                    Text("\(scoreDisplay)")
+                        .font(DesignSystem.roundedFont(size: 24, weight: .bold))
+                        .foregroundColor(.white)
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                    Text("SCORE")
+                        .font(DesignSystem.roundedFont(size: 11, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.75))
+                        .tracking(1)
                 }
-                .foregroundColor(.white.opacity(0.9))
 
-                HStack(spacing: 5) {
-                    ForEach(0..<SplittingSeedsViewModel.roundsPerLevel, id: \.self) { index in
-                        Capsule()
-                            .fill(index < viewModel.roundInLevel ? Color.white : Color.white.opacity(0.32))
-                            .frame(width: index < viewModel.roundInLevel ? 16 : 7, height: 7)
-                            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: viewModel.roundInLevel)
+                Spacer(minLength: 4)
+
+                VStack(alignment: .trailing, spacing: DesignSystem.Spacing.xxs) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "flag.fill")
+                            .font(.system(size: 11))
+                        Text("LEVEL \(viewModel.level)")
+                            .font(DesignSystem.roundedFont(size: 13, weight: .semibold))
+                    }
+                    .foregroundColor(.white.opacity(0.9))
+
+                    HStack(spacing: 5) {
+                        ForEach(0..<SplittingSeedsViewModel.roundsPerLevel, id: \.self) { index in
+                            Capsule()
+                                .fill(index < viewModel.roundInLevel ? Color.white : Color.white.opacity(0.32))
+                                .frame(width: index < viewModel.roundInLevel ? 16 : 7, height: 7)
+                                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: viewModel.roundInLevel)
+                        }
                     }
                 }
             }
+            .padding(.horizontal, DesignSystem.Spacing.md)
+            .padding(.vertical, DesignSystem.Spacing.sm)
+            .background(.ultraThinMaterial)
+            .background(Color.black.opacity(0.22))
+            .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact, style: .continuous)
+                    .stroke(.white.opacity(0.18), lineWidth: 1)
+            )
         }
-        .padding(DesignSystem.Spacing.md)
-        .background(
-            ZStack {
-                DesignSystem.mathGradient
-                LinearGradient(colors: [.white.opacity(0.22), .clear], startPoint: .top, endPoint: .center)
-            }
-        )
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius, style: .continuous)
-                .stroke(.white.opacity(0.25), lineWidth: 1)
-        )
-        .shadow(color: Color(hex: "#2ECC71").opacity(0.28), radius: 14, y: 6)
         .padding(.horizontal, DesignSystem.Spacing.md)
+    }
+
+    private var pauseButton: some View {
+        Button(action: { /* pause owned by caller / navigation */ }) {
+            Image(systemName: "pause.fill")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 36, height: 36)
+                .background(.ultraThinMaterial)
+                .background(Color.black.opacity(0.22))
+                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact, style: .continuous)
+                        .stroke(.white.opacity(0.18), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
     }
 
     private func hudItem(icon: String, label: String, value: String) -> some View {
@@ -241,6 +270,9 @@ struct SplittingSeedsView: View {
     }
 
     // MARK: Play field
+    //
+    // No longer its own bordered/shadowed card — it sits directly on
+    // the full-bleed ForestBackdrop now, matching the reference art.
 
     private var playField: some View {
         GeometryReader { geo in
@@ -249,15 +281,6 @@ struct SplittingSeedsView: View {
             let stickLength = playRadius * 2.3
 
             ZStack {
-                arenaBackdrop(size: geo.size)
-
-                RadialGradient(
-                    colors: [.clear, .black.opacity(0.16)],
-                    center: .center,
-                    startRadius: playRadius * 0.4,
-                    endRadius: playRadius * 1.3
-                )
-
                 soilPatch(radius: playRadius * 0.42)
                     .position(center)
 
@@ -311,106 +334,6 @@ struct SplittingSeedsView: View {
             .disabled(viewModel.phase != .playing)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius, style: .continuous)
-                .stroke(
-                    LinearGradient(colors: [.white.opacity(0.55), .white.opacity(0.05)], startPoint: .top, endPoint: .bottom),
-                    lineWidth: 2
-                )
-        )
-        .shadow(color: .black.opacity(0.18), radius: 18, y: 10)
-    }
-
-    // MARK: Forest arena backdrop
-
-    private func arenaBackdrop(size: CGSize) -> some View {
-        ZStack {
-            LinearGradient(
-                colors: [Color(hex: "#6AA36E"), Color(hex: "#3B5F40")],
-                startPoint: .top, endPoint: .bottom
-            )
-
-            hillsSilhouette(size: size)
-
-            leafCluster
-                .position(x: 28, y: 24)
-            leafCluster
-                .rotationEffect(.degrees(180))
-                .position(x: size.width - 28, y: size.height - 24)
-
-            treeTrunk
-                .position(x: 16, y: size.height - 6)
-            treeTrunk
-                .scaleEffect(x: -1, y: 1)
-                .position(x: size.width - 16, y: 8)
-
-            BirdSilhouette()
-                .fill(Color(hex: "#6B4226"))
-                .frame(width: 34, height: 26)
-                .offset(y: sin(ambientPhase * 2 * .pi * 2) * 3)
-                .position(x: size.width - 40, y: 34)
-            BirdSilhouette()
-                .fill(Color(hex: "#6B4226"))
-                .scaleEffect(x: -1, y: 1)
-                .frame(width: 34, height: 26)
-                .offset(y: cos(ambientPhase * 2 * .pi * 2) * 3)
-                .position(x: 40, y: size.height - 34)
-        }
-    }
-
-    private func hillsSilhouette(size: CGSize) -> some View {
-        Path { path in
-            path.move(to: CGPoint(x: 0, y: size.height))
-            path.addLine(to: CGPoint(x: 0, y: size.height * 0.82))
-            path.addCurve(
-                to: CGPoint(x: size.width * 0.5, y: size.height * 0.9),
-                control1: CGPoint(x: size.width * 0.2, y: size.height * 0.7),
-                control2: CGPoint(x: size.width * 0.35, y: size.height * 0.95)
-            )
-            path.addCurve(
-                to: CGPoint(x: size.width, y: size.height * 0.8),
-                control1: CGPoint(x: size.width * 0.7, y: size.height * 0.85),
-                control2: CGPoint(x: size.width * 0.85, y: size.height * 0.7)
-            )
-            path.addLine(to: CGPoint(x: size.width, y: size.height))
-            path.closeSubpath()
-        }
-        .fill(Color(hex: "#2F4D33").opacity(0.35))
-    }
-
-    private var treeTrunk: some View {
-        VStack(spacing: -6) {
-            Circle()
-                .fill(Color(hex: "#2F4D33").opacity(0.55))
-                .frame(width: 26, height: 26)
-            Rectangle()
-                .fill(Color(hex: "#4A3728").opacity(0.4))
-                .frame(width: 5, height: 18)
-        }
-    }
-
-    private var leafCluster: some View {
-        ZStack {
-            ForEach(0..<3, id: \.self) { i in
-                Image(systemName: "leaf.fill")
-                    .font(.system(size: 16))
-                    .foregroundColor(Color(hex: "#2F4D33").opacity(0.6))
-                    .rotationEffect(.degrees(Double(i) * 35))
-                    .offset(x: CGFloat(i) * 6, y: CGFloat(i) * 4)
-            }
-        }
-    }
-
-    private func soilPatch(radius: CGFloat) -> some View {
-        Circle()
-            .fill(
-                RadialGradient(
-                    colors: [Color(hex: "#5B4331").opacity(0.5), .clear],
-                    center: .center, startRadius: 0, endRadius: radius
-                )
-            )
-            .frame(width: radius * 2, height: radius * 2)
     }
 
     // MARK: Pivot
@@ -428,6 +351,17 @@ struct SplittingSeedsView: View {
                 .overlay(Circle().stroke(Color(hex: "#4A2E17").opacity(0.4), lineWidth: 2))
                 .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
         }
+    }
+
+    private func soilPatch(radius: CGFloat) -> some View {
+        Circle()
+            .fill(
+                RadialGradient(
+                    colors: [Color(hex: "#0E2E1C").opacity(0.35), .clear],
+                    center: .center, startRadius: 0, endRadius: radius
+                )
+            )
+            .frame(width: radius * 2, height: radius * 2)
     }
 
     /// Base position from the seed's fixed home angle (used for scoring, unchanged).
@@ -506,7 +440,7 @@ struct SplittingSeedsView: View {
                         startPoint: .top, endPoint: .bottom
                     )
                 )
-                .frame(width: length, height: 14)
+                .frame(width: length, height: 12)
                 .overlay(
                     Capsule().stroke(Color(hex: "#4A2E17").opacity(0.5), lineWidth: 1)
                 )
@@ -518,7 +452,7 @@ struct SplittingSeedsView: View {
                                 .frame(width: 1)
                         }
                     }
-                    .frame(width: length, height: 14)
+                    .frame(width: length, height: 12)
                     .clipShape(Capsule())
                 )
                 .overlay(
@@ -728,66 +662,156 @@ private struct SeedShape: Shape {
     }
 }
 
-// MARK: - BirdSilhouette
+// MARK: - ForestBackdrop
+//
+// Full-screen scene behind the whole game, matching the reference art:
+// a solid emerald-to-deep-green gradient, a soft vignette, scattered
+// low-opacity leaf/acorn texture, and two branch-with-bird clusters in
+// opposite corners. Scoped to this file only (own color constants),
+// same pattern LostInMigrationView uses for its skyBackdrop — no new
+// tokens added to DesignSystem. `phase` (0...1, looping) drives the
+// birds' idle bob with no extra timers/state needed.
 
-private struct BirdSilhouette: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let w = rect.width
-        let h = rect.height
-
-        path.addEllipse(in: CGRect(x: w * 0.15, y: h * 0.25, width: w * 0.6, height: h * 0.6))
-        path.addEllipse(in: CGRect(x: w * 0.55, y: h * 0.05, width: w * 0.35, height: h * 0.35))
-        path.move(to: CGPoint(x: w * 0.9, y: h * 0.2))
-        path.addLine(to: CGPoint(x: w * 1.0, y: h * 0.24))
-        path.addLine(to: CGPoint(x: w * 0.9, y: h * 0.3))
-        path.closeSubpath()
-        path.move(to: CGPoint(x: w * 0.15, y: h * 0.5))
-        path.addLine(to: CGPoint(x: 0, y: h * 0.35))
-        path.addLine(to: CGPoint(x: 0, y: h * 0.6))
-        path.closeSubpath()
-
-        return path
-    }
-}
-
-// MARK: - AmbientBackdrop
-
-/// Full-screen backdrop behind the whole game: a deep gradient with a
-/// handful of drifting firefly-style particles whose positions are
-/// derived purely from `phase` (0...1, looping) so no timers or extra
-/// per-frame state are needed.
-private struct AmbientBackdrop: View {
+private struct ForestBackdrop: View {
     let phase: CGFloat
-    private let fireflyCount = 7
+
+    private static let forestTop = Color(hex: "#3FAE73")
+    private static let forestBottom = Color(hex: "#1B5C3C")
+
+    private struct LeafSpec: Identifiable {
+        let id = Int.random(in: 0...Int.max)
+        let position: UnitPoint
+        let rotation: Double
+        let scale: CGFloat
+        let opacity: Double
+        let isAcorn: Bool
+    }
+
+    private static let scatterSpecs: [LeafSpec] = [
+        LeafSpec(position: UnitPoint(x: 0.08, y: 0.42), rotation: 15, scale: 1.1, opacity: 0.12, isAcorn: false),
+        LeafSpec(position: UnitPoint(x: 0.9, y: 0.2), rotation: -20, scale: 0.9, opacity: 0.1, isAcorn: true),
+        LeafSpec(position: UnitPoint(x: 0.78, y: 0.62), rotation: 40, scale: 1.0, opacity: 0.1, isAcorn: false),
+        LeafSpec(position: UnitPoint(x: 0.15, y: 0.78), rotation: -10, scale: 0.8, opacity: 0.12, isAcorn: true),
+        LeafSpec(position: UnitPoint(x: 0.5, y: 0.12), rotation: 60, scale: 0.85, opacity: 0.08, isAcorn: false),
+        LeafSpec(position: UnitPoint(x: 0.35, y: 0.88), rotation: 5, scale: 1.05, opacity: 0.1, isAcorn: false),
+        LeafSpec(position: UnitPoint(x: 0.92, y: 0.85), rotation: -35, scale: 0.9, opacity: 0.1, isAcorn: false)
+    ]
 
     var body: some View {
         GeometryReader { geo in
             ZStack {
                 LinearGradient(
-                    colors: [Color(hex: "#1F3B2C"), Color(hex: "#16241C")],
+                    colors: [Self.forestTop, Self.forestBottom],
                     startPoint: .top, endPoint: .bottom
                 )
 
-                ForEach(0..<fireflyCount, id: \.self) { index in
-                    let seed = CGFloat(index) * 47.0
-                    let angle = (phase * 2 * .pi) + seed
-                    let x = geo.size.width * (0.15 + 0.7 * (0.5 + 0.5 * sin(angle * 0.6 + seed)))
-                    let y = geo.size.height * (0.1 + 0.8 * (0.5 + 0.5 * cos(angle * 0.8 + seed * 1.3)))
-                    Circle()
-                        .fill(Color(hex: "#FFE08A"))
-                        .frame(width: 3, height: 3)
-                        .shadow(color: Color(hex: "#FFE08A"), radius: 5)
-                        .opacity(0.3 + 0.35 * sin(angle + seed))
-                        .position(x: x, y: y)
+                ForEach(Self.scatterSpecs) { spec in
+                    Group {
+                        if spec.isAcorn {
+                            AcornShape()
+                        } else {
+                            Image(systemName: "leaf.fill")
+                        }
+                    }
+                    .font(.system(size: 30 * spec.scale))
+                    .foregroundColor(.black.opacity(spec.opacity))
+                    .rotationEffect(.degrees(spec.rotation))
+                    .position(x: geo.size.width * spec.position.x, y: geo.size.height * spec.position.y)
                 }
 
+                BranchCluster(bobPhase: phase)
+                    .position(x: geo.size.width * 0.16, y: geo.size.height * 0.14)
+
+                BranchCluster(bobPhase: phase, flipped: true)
+                    .rotationEffect(.degrees(180))
+                    .position(x: geo.size.width * 0.86, y: geo.size.height * 0.9)
+
                 RadialGradient(
-                    colors: [.clear, .black.opacity(0.45)],
-                    center: .center, startRadius: geo.size.width * 0.3, endRadius: geo.size.width
+                    colors: [.clear, .black.opacity(0.28)],
+                    center: .center,
+                    startRadius: geo.size.width * 0.35,
+                    endRadius: geo.size.width * 1.1
                 )
             }
         }
+    }
+}
+
+// MARK: - AcornShape
+
+private struct AcornShape: View {
+    var body: some View {
+        ZStack {
+            Capsule()
+                .frame(width: 12, height: 6)
+                .offset(y: -7)
+            Ellipse()
+                .frame(width: 14, height: 16)
+        }
+    }
+}
+
+// MARK: - BranchCluster
+//
+// A short diagonal branch with a couple of leaves and a small bird
+// silhouette perched on it — decorative only, matching the reference
+// screenshot's corner branches.
+
+private struct BranchCluster: View {
+    let bobPhase: CGFloat
+    var flipped: Bool = false
+
+    var body: some View {
+        ZStack {
+            Capsule()
+                .fill(Color(hex: "#4A3728").opacity(0.55))
+                .frame(width: 130, height: 7)
+                .rotationEffect(.degrees(-32))
+
+            ForEach(0..<3, id: \.self) { i in
+                Image(systemName: "leaf.fill")
+                    .font(.system(size: 16))
+                    .foregroundColor(Color(hex: "#245C3E").opacity(0.6))
+                    .rotationEffect(.degrees(Double(i) * 28 - 20))
+                    .offset(x: CGFloat(i) * 18 - 30, y: CGFloat(i) * -10 + 6)
+            }
+
+            ForestBirdSilhouette()
+                .fill(Color(hex: "#6B4226").opacity(0.85))
+                .frame(width: 26, height: 22)
+                .scaleEffect(x: flipped ? -1 : 1, y: 1)
+                .offset(x: 22, y: -18 + sin(bobPhase * 2 * .pi) * 1.5)
+        }
+    }
+}
+
+// MARK: - ForestBirdSilhouette
+//
+// Small, simplified bird silhouette (oval body + head + beak + wing)
+// for the decorative corner branches — distinct from the more
+// detailed `BirdShape` used for the Lost in Migration gameplay birds,
+// kept self-contained to this file per the project's per-screen shape
+// convention.
+
+private struct ForestBirdSilhouette: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let w = rect.width, h = rect.height
+
+        path.addEllipse(in: CGRect(x: w * 0.1, y: h * 0.3, width: w * 0.75, height: h * 0.6))
+        path.addEllipse(in: CGRect(x: w * 0.55, y: 0, width: w * 0.4, height: h * 0.45))
+
+        path.move(to: CGPoint(x: w * 0.9, y: h * 0.15))
+        path.addLine(to: CGPoint(x: w, y: h * 0.2))
+        path.addLine(to: CGPoint(x: w * 0.9, y: h * 0.28))
+        path.closeSubpath()
+
+        path.move(to: CGPoint(x: w * 0.35, y: h * 0.5))
+        path.addQuadCurve(to: CGPoint(x: w * 0.1, y: h * 0.85), control: CGPoint(x: w * 0.05, y: h * 0.55))
+        path.addQuadCurve(to: CGPoint(x: w * 0.35, y: h * 0.6), control: CGPoint(x: w * 0.2, y: h * 0.75))
+        path.closeSubpath()
+
+        return path
     }
 }
 

@@ -216,10 +216,8 @@ struct PiratePassageView: View {
     private func pirateLayer(cell: CGFloat) -> some View {
         ForEach(viewModel.pirates) { pirate in
             let position = animatedPosition(for: pirate)
-            Image(systemName: "sailboat.fill")
-                .font(.system(size: cell * 0.42))
-                .foregroundColor(Color(hex: pirate.colorHex))
-                .rotationEffect(.degrees(180))
+            PirateShipView(colorHex: pirate.colorHex, isPlayer: false)
+                .frame(width: cell * 0.7, height: cell * 0.7)
                 .position(center(for: position, cell: cell))
                 .animation(.easeInOut(duration: 0.45), value: position)
         }
@@ -244,9 +242,8 @@ struct PiratePassageView: View {
         let shipPosition = (viewModel.phase == .executing || isLevelResultPhase)
             ? viewModel.animatedShipPosition
             : (viewModel.currentPath.first ?? PiratePassageViewModel.Position(row: 0, col: 0))
-        return Image(systemName: "sailboat.fill")
-            .font(.system(size: cell * 0.48))
-            .foregroundColor(Color(hex: "#FFB347"))
+        return PirateShipView(colorHex: "#FFB347", isPlayer: true)
+            .frame(width: cell * 0.78, height: cell * 0.78)
             .position(center(for: shipPosition, cell: cell))
             .animation(.easeInOut(duration: 0.45), value: shipPosition)
     }
@@ -434,6 +431,95 @@ struct PiratePassageView: View {
             .frame(maxWidth: 320)
             .background(DesignSystem.backgroundOnboarding)
             .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius))
+        }
+    }
+}
+
+// MARK: - Custom Ship Rendering
+
+private enum PirateShipShape {
+    static func hull(in rect: CGRect) -> Path {
+        var path = Path()
+        let w = rect.width, h = rect.height
+        path.move(to: CGPoint(x: rect.minX + w * 0.06, y: rect.minY + h * 0.60))
+        path.addLine(to: CGPoint(x: rect.minX + w * 0.94, y: rect.minY + h * 0.60))
+        path.addLine(to: CGPoint(x: rect.minX + w * 0.80, y: rect.minY + h * 0.90))
+        path.addLine(to: CGPoint(x: rect.minX + w * 0.20, y: rect.minY + h * 0.90))
+        path.closeSubpath()
+        return path
+    }
+    static func mast(in rect: CGRect) -> Path {
+        var path = Path()
+        let w = rect.width, h = rect.height
+        path.move(to: CGPoint(x: rect.minX + w * 0.5, y: rect.minY + h * 0.04))
+        path.addLine(to: CGPoint(x: rect.minX + w * 0.5, y: rect.minY + h * 0.62))
+        return path
+    }
+    static func sail(in rect: CGRect) -> Path {
+        var path = Path()
+        let w = rect.width, h = rect.height
+        path.move(to: CGPoint(x: rect.minX + w * 0.5, y: rect.minY + h * 0.10))
+        path.addLine(to: CGPoint(x: rect.minX + w * 0.5, y: rect.minY + h * 0.60))
+        path.addLine(to: CGPoint(x: rect.minX + w * 0.18, y: rect.minY + h * 0.60))
+        path.closeSubpath()
+        return path
+    }
+    static func flag(in rect: CGRect) -> Path {
+        var path = Path()
+        let w = rect.width, h = rect.height
+        path.move(to: CGPoint(x: rect.minX + w * 0.5, y: rect.minY + h * 0.04))
+        path.addLine(to: CGPoint(x: rect.minX + w * 0.72, y: rect.minY + h * 0.10))
+        path.addLine(to: CGPoint(x: rect.minX + w * 0.5, y: rect.minY + h * 0.17))
+        path.closeSubpath()
+        return path
+    }
+    static func wake(in rect: CGRect) -> Path {
+        Path(ellipseIn: CGRect(
+            x: rect.minX + rect.width * 0.10, y: rect.minY + rect.height * 0.88,
+            width: rect.width * 0.80, height: rect.height * 0.14
+        ))
+    }
+}
+
+/// Original, hand-drawn pirate ship — hull, mast, sail, and a
+/// color-coded pennant — with a subtle continuous bob for life.
+/// Not a system symbol or borrowed artwork.
+private struct PirateShipView: View {
+    let colorHex: String
+    let isPlayer: Bool
+
+    var body: some View {
+        TimelineView(.animation) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            let bob = sin(t * 2.4) * 1.6
+
+            GeometryReader { geo in
+                let rect = CGRect(origin: .zero, size: geo.size)
+                ZStack {
+                    PirateShipShape.wake(in: rect)
+                        .fill(Color.white.opacity(0.25))
+
+                    Group {
+                        PirateShipShape.hull(in: rect)
+                            .fill(LinearGradient(
+                                colors: [Color(hex: colorHex), Color(hex: colorHex).opacity(0.65)],
+                                startPoint: .top, endPoint: .bottom
+                            ))
+                            .overlay(PirateShipShape.hull(in: rect).stroke(Color.black.opacity(0.3), lineWidth: 1))
+
+                        PirateShipShape.mast(in: rect)
+                            .stroke(Color.black.opacity(0.55), lineWidth: max(1, rect.width * 0.03))
+
+                        PirateShipShape.sail(in: rect)
+                            .fill(Color.white.opacity(isPlayer ? 0.97 : 0.88))
+                            .overlay(PirateShipShape.sail(in: rect).stroke(Color.black.opacity(0.15), lineWidth: 1))
+
+                        PirateShipShape.flag(in: rect)
+                            .fill(isPlayer ? Color(hex: "#F5A623") : Color(hex: colorHex))
+                    }
+                    .offset(y: bob)
+                }
+            }
         }
     }
 }

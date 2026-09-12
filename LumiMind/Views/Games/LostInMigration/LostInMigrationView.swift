@@ -183,7 +183,7 @@ struct LostInMigrationView: View {
     /// texture in the reference screenshot without any real cost.
     private var grainOverlay: some View {
         Canvas { context, size in
-            var rng = SeededGenerator(seed: 42)
+            var rng = MigrationGrainRNG(seed: 42)
             for _ in 0..<140 {
                 let x = CGFloat.random(in: 0...size.width, using: &rng)
                 let y = CGFloat.random(in: 0...size.height, using: &rng)

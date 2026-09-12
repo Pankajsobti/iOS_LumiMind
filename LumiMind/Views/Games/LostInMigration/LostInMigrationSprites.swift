@@ -158,13 +158,16 @@ struct MigrationHillShape: Shape {
     }
 }
 
-// MARK: SeededGenerator
+// MARK: MigrationGrainRNG
 //
 // Deterministic RNG so decorative elements (e.g. the paper-grain
 // texture) render the same dot pattern on every redraw instead of
-// flickering with a new random layout each frame.
+// flickering with a new random layout each frame. Named distinctly
+// from Core/DailySeededRandom.swift's `SeededGenerator` to avoid a
+// redeclaration collision — this one is purely a rendering detail
+// local to this screen, not the app's seeded-random source of truth.
 
-struct SeededGenerator: RandomNumberGenerator {
+struct MigrationGrainRNG: RandomNumberGenerator {
     private var state: UInt64
     init(seed: UInt64) { self.state = seed == 0 ? 1 : seed }
     mutating func next() -> UInt64 {

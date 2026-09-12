@@ -132,17 +132,18 @@ struct FlowSwitchView: View {
     }
 
     private func leafView(for leaf: FlowSwitchViewModel.LeafInstance, in size: CGSize, at date: Date) -> some View {
-        let elapsed = date.timeIntervalSince(viewModel.referenceTime)
-        let x = Self.wrapped(leaf.anchorX + CGFloat(viewModel.velocity.dx) * CGFloat(elapsed))
-        let y = Self.wrapped(leaf.anchorY + CGFloat(viewModel.velocity.dy) * CGFloat(elapsed))
+    let elapsed = date.timeIntervalSince(viewModel.referenceTime)
+    let x = Self.wrapped(leaf.anchorX + CGFloat(viewModel.velocity.dx) * CGFloat(elapsed))
+    let y = Self.wrapped(leaf.anchorY + CGFloat(viewModel.velocity.dy) * CGFloat(elapsed))
 
-        return LeafShape()
-            .fill(viewModel.currentTrial.color.color)
-            .frame(width: 52, height: 68)
-            .overlay(LeafShape().stroke(Color.white, lineWidth: 3))
-            .rotationEffect(.degrees(viewModel.currentTrial.pointing.rotationDegrees))
-            .position(x: x * size.width, y: y * size.height)
-    }
+    return LeafShape()
+        .fill(viewModel.currentTrial.color.color)
+        .frame(width: 52, height: 68)
+        .overlay(LeafShape().stroke(Color.white, lineWidth: 3))
+        .rotationEffect(.degrees(viewModel.currentTrial.pointing.rotationDegrees))
+        .position(x: x * size.width, y: y * size.height)
+        .transaction { $0.disablesAnimations = true }
+}
 
     private static func wrapped(_ value: CGFloat) -> CGFloat {
         var v = value.truncatingRemainder(dividingBy: 1)

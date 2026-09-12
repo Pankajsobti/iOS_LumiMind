@@ -3,16 +3,17 @@ import SwiftUI
 // MARK: - TrainOfThoughtView
 //
 // Presentational only — renders TrainOfThoughtViewModel's published
-// state and forwards switch taps into `toggleSwitch(_:)`. Same
-// structure as LostInMigrationView: header uses the category
-// gradient, finished overlay shows score with a Continue button that
-// calls onComplete (caller routes to ScienceExplainerView).
+// state and forwards switch taps into `toggleSwitch(_:)`. Header now
+// mirrors FlowSwitchView's stat bar (TIME / SCORE / multiplier),
+// sitting inside the existing attentionGradient card. Track is drawn
+// as a toy-railway (parallel rails + perpendicular ties) instead of a
+// flat line. Finished overlay unchanged.
 
 struct TrainOfThoughtView: View {
     @StateObject private var viewModel: TrainOfThoughtViewModel
     var onComplete: () -> Void
 
-    private static let boardSize = CGSize(width: 340, height: 420)
+    private static let boardSize = CGSize(width: 340, height: 470)
 
     init(gameResultViewModel: GameResultViewModel, isFitTest: Bool = false, onComplete: @escaping () -> Void) {
         _viewModel = StateObject(wrappedValue: TrainOfThoughtViewModel(gameResultViewModel: gameResultViewModel, isFitTest: isFitTest))
@@ -47,21 +48,64 @@ struct TrainOfThoughtView: View {
 
     private var header: some View {
         VStack(spacing: DesignSystem.Spacing.sm) {
-            HStack {
-                Text("Train of Thought")
-                    .font(DesignSystem.title2)
-                    .foregroundColor(.white)
-                Spacer()
-                Text("\(viewModel.successCount) routed")
-                    .font(DesignSystem.roundedFont(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
-            }
-            ProgressBar(fraction: viewModel.timeRemainingFraction)
+            Text("Train of Thought")
+                .font(DesignSystem.title2)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            statRow
         }
         .padding(DesignSystem.Spacing.md)
         .background(DesignSystem.attentionGradient)
         .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius))
         .padding(.horizontal, DesignSystem.Spacing.md)
+    }
+
+    // MARK: Stat row (Flow-Switch-style TIME / SCORE / multiplier)
+
+    private var statRow: some View {
+        HStack(spacing: 0) {
+            statGroup(label: "TIME", value: viewModel.timeRemainingLabel)
+            statDivider
+            statGroup(label: "SCORE", value: "\(viewModel.currentScore)")
+            statDivider
+            multiplierGroup
+        }
+        .frame(height: 44)
+    }
+
+    private var statDivider: some View {
+        Rectangle()
+            .fill(Color.white.opacity(0.3))
+            .frame(width: 1, height: 26)
+    }
+
+    private func statGroup(label: String, value: String) -> some View {
+        VStack(spacing: 2) {
+            Text(label)
+                .font(DesignSystem.roundedFont(size: 11, weight: .semibold))
+                .foregroundColor(.white.opacity(0.7))
+                .tracking(0.5)
+            Text(value)
+                .font(DesignSystem.roundedFont(size: 17, weight: .bold))
+                .foregroundColor(.white)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var multiplierGroup: some View {
+        VStack(spacing: 4) {
+            HStack(spacing: 4) {
+                ForEach(0..<TrainOfThoughtViewModel.meterMax, id: \.self) { index in
+                    Circle()
+                        .fill(index < viewModel.meter ? Color.white : Color.white.opacity(0.3))
+                        .frame(width: 6, height: 6)
+                }
+            }
+            Text("x\(viewModel.multiplier)")
+                .font(DesignSystem.roundedFont(size: 15, weight: .bold))
+                .foregroundColor(.white)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: Board
@@ -87,13 +131,56 @@ struct TrainOfThoughtView: View {
         .shadow(color: .black.opacity(0.06), radius: 6, y: 3)
     }
 
+    // MARK: Toy-railway track rendering
+    //
+    // Each segment is drawn as two thin parallel rails with
+    // perpendicular wooden ties in between — a small geometry helper
+    // computes the perpendicular offset per segment so this works for
+    // any polyline, not just straight single-segment tracks.
+
+    private static let railColor = Color(hex: "#B7AF9E")
+    private static let tieColor = Color(hex: "#8B6F4E")
+    private static let railOffset: CGFloat = 5
+    private static let tieSpacing: CGFloat = 16
+    private static let tieLength: CGFloat = 14
+
     private var trackCanvas: some View {
         Canvas { context, _ in
             for segment in TrainOfThoughtViewModel.segments.values {
-                var path = Path()
-                path.move(to: segment.points[0])
-                for point in segment.points.dropFirst() { path.addLine(to: point) }
-                context.stroke(path, with: .color(.gray.opacity(0.35)), style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
+                Self.drawRailTrack(points: segment.points, in: context)
+            }
+        }
+    }
+
+    private static func drawRailTrack(points: [CGPoint], in context: GraphicsContext) {
+        guard points.count > 1 else { return }
+
+        for i in 0..<points.count - 1 {
+            let p0 = points[i], p1 = points[i + 1]
+            let dx = p1.x - p0.x, dy = p1.y - p0.y
+            let len = hypot(dx, dy)
+            guard len > 0 else { continue }
+            let ux = dx / len, uy = dy / len
+            let px = -uy, py = ux // unit perpendicular
+
+            // Ties first, so rails render on top.
+            var tieDistance: CGFloat = 0
+            while tieDistance <= len {
+                let cx = p0.x + ux * tieDistance
+                let cy = p0.y + uy * tieDistance
+                var tie = Path()
+                tie.move(to: CGPoint(x: cx - px * tieLength / 2, y: cy - py * tieLength / 2))
+                tie.addLine(to: CGPoint(x: cx + px * tieLength / 2, y: cy + py * tieLength / 2))
+                context.stroke(tie, with: .color(tieColor), style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                tieDistance += tieSpacing
+            }
+
+            // Two parallel rails.
+            for sign: CGFloat in [-1, 1] {
+                var rail = Path()
+                rail.move(to: CGPoint(x: p0.x + px * railOffset * sign, y: p0.y + py * railOffset * sign))
+                rail.addLine(to: CGPoint(x: p1.x + px * railOffset * sign, y: p1.y + py * railOffset * sign))
+                context.stroke(rail, with: .color(railColor), style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
             }
         }
     }
@@ -210,23 +297,6 @@ struct TrainOfThoughtView: View {
             .background(DesignSystem.backgroundOnboarding)
             .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius))
         }
-    }
-}
-
-// MARK: - ProgressBar
-
-private struct ProgressBar: View {
-    let fraction: Double
-
-    var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule().fill(.white.opacity(0.3))
-                Capsule().fill(.white)
-                    .frame(width: geo.size.width * max(0, min(1, fraction)))
-            }
-        }
-        .frame(height: 6)
     }
 }
 

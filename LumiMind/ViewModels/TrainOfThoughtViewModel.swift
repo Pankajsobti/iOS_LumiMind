@@ -6,12 +6,12 @@ import Combine
 //
 // Owns gameplay state for Train of Thought: trains spawn from two
 // entry points, travel a fixed (validated, always-solvable) track
-// network through two switches, and must reach the station matching
-// their color. Player toggles switches before an approaching train
-// reaches them. Continuous divided-attention loop rather than
-// discrete rounds — mirrors LostInMigrationViewModel's conventions
-// (View only renders published state; this ViewModel submits the
-// result itself the moment the round timer ends).
+// network through a shared switch tree, and must reach the station
+// matching their color. Player toggles switches before an
+// approaching train reaches them. Continuous divided-attention loop
+// rather than discrete rounds — mirrors LostInMigrationViewModel's
+// conventions (View only renders published state; this ViewModel
+// submits the result itself the moment the round timer ends).
 
 @MainActor
 final class TrainOfThoughtViewModel: ObservableObject {
@@ -63,27 +63,51 @@ final class TrainOfThoughtViewModel: ObservableObject {
     static let baseSpeed: Double = 55
     static let maxSpeed: Double = 105
 
+    /// Streak-tracking tunables for the Flow-Switch-style stat bar.
+    /// These only drive the on-screen meter/multiplier — they never
+    /// alter the point values awarded in advanceTrains/detectCollisions.
+    static let meterMax: Int = 5
+    static let maxMultiplier: Int = 8
+
     // MARK: Fixed, pre-validated track network
     //
-    // A single hand-built template graph. Every station is reachable
-    // from every entry point via at least one switch configuration,
-    // so every spawned train is solvable by construction — this
+    // A single hand-built template graph. Both entry points feed into
+    // a shared trunk switch (s0), which in turn feeds a shared switch
+    // tree (s1, s2, s3) down to five stations — so every station is
+    // reachable from every entry point via at least one switch
+    // configuration, no matter which entry a train spawned from. This
     // stands in for a full procedural-graph + reachability validator
     // (see optional enhancements).
 
     static let stations: [StationState] = [
-        StationState(id: "red", position: CGPoint(x: 70, y: 380), colorHex: "#FF5E5B"),
-        StationState(id: "blue", position: CGPoint(x: 270, y: 380), colorHex: "#4A7BFF")
+        StationState(id: "red",    position: CGPoint(x: 25,  y: 430), colorHex: "#FF5E5B"),
+        StationState(id: "blue",   position: CGPoint(x: 100, y: 430), colorHex: "#4A7BFF"),
+        StationState(id: "green",  position: CGPoint(x: 170, y: 430), colorHex: "#2ECC71"),
+        StationState(id: "orange", position: CGPoint(x: 240, y: 430), colorHex: "#FF8A3D"),
+        StationState(id: "purple", position: CGPoint(x: 315, y: 430), colorHex: "#9B6BFF")
     ]
 
     static let segments: [String: TrackSegment] = {
         var s: [String: TrackSegment] = [:]
-        s["e1"] = TrackSegment(id: "e1", points: [CGPoint(x: 60, y: 30), CGPoint(x: 100, y: 140)], destination: .switchNode("s1"))
-        s["e2"] = TrackSegment(id: "e2", points: [CGPoint(x: 280, y: 30), CGPoint(x: 240, y: 140)], destination: .switchNode("s2"))
-        s["s1_red"] = TrackSegment(id: "s1_red", points: [CGPoint(x: 100, y: 140), CGPoint(x: 100, y: 260), CGPoint(x: 70, y: 380)], destination: .station("red"))
-        s["s1_blue"] = TrackSegment(id: "s1_blue", points: [CGPoint(x: 100, y: 140), CGPoint(x: 200, y: 260), CGPoint(x: 270, y: 380)], destination: .station("blue"))
-        s["s2_red"] = TrackSegment(id: "s2_red", points: [CGPoint(x: 240, y: 140), CGPoint(x: 140, y: 260), CGPoint(x: 70, y: 380)], destination: .station("red"))
-        s["s2_blue"] = TrackSegment(id: "s2_blue", points: [CGPoint(x: 240, y: 140), CGPoint(x: 240, y: 260), CGPoint(x: 270, y: 380)], destination: .station("blue"))
+        // Entries converge into the shared trunk switch s0.
+        s["e1"] = TrackSegment(id: "e1", points: [CGPoint(x: 60, y: 20), CGPoint(x: 170, y: 130)], destination: .switchNode("s0"))
+        s["e2"] = TrackSegment(id: "e2", points: [CGPoint(x: 280, y: 20), CGPoint(x: 170, y: 130)], destination: .switchNode("s0"))
+
+        // Trunk splits into the two subtrees.
+        s["s0_a"] = TrackSegment(id: "s0_a", points: [CGPoint(x: 170, y: 130), CGPoint(x: 95, y: 230)], destination: .switchNode("s1"))
+        s["s0_b"] = TrackSegment(id: "s0_b", points: [CGPoint(x: 170, y: 130), CGPoint(x: 245, y: 230)], destination: .switchNode("s2"))
+
+        // s1 -> red / blue
+        s["s1_a"] = TrackSegment(id: "s1_a", points: [CGPoint(x: 95, y: 230), CGPoint(x: 25, y: 430)], destination: .station("red"))
+        s["s1_b"] = TrackSegment(id: "s1_b", points: [CGPoint(x: 95, y: 230), CGPoint(x: 100, y: 430)], destination: .station("blue"))
+
+        // s2 -> green directly, or down into s3
+        s["s2_a"] = TrackSegment(id: "s2_a", points: [CGPoint(x: 245, y: 230), CGPoint(x: 170, y: 430)], destination: .station("green"))
+        s["s2_b"] = TrackSegment(id: "s2_b", points: [CGPoint(x: 245, y: 230), CGPoint(x: 280, y: 320)], destination: .switchNode("s3"))
+
+        // s3 -> orange / purple
+        s["s3_a"] = TrackSegment(id: "s3_a", points: [CGPoint(x: 280, y: 320), CGPoint(x: 240, y: 430)], destination: .station("orange"))
+        s["s3_b"] = TrackSegment(id: "s3_b", points: [CGPoint(x: 280, y: 320), CGPoint(x: 315, y: 430)], destination: .station("purple"))
         return s
     }()
 
@@ -92,8 +116,10 @@ final class TrainOfThoughtViewModel: ObservableObject {
     @Published private(set) var phase: Phase = .playing
     @Published private(set) var trains: [TrainState] = []
     @Published private(set) var switches: [SwitchState] = [
-        SwitchState(id: "s1", position: CGPoint(x: 100, y: 140), activeBranch: 0, branchSegmentIds: ["s1_red", "s1_blue"]),
-        SwitchState(id: "s2", position: CGPoint(x: 240, y: 140), activeBranch: 0, branchSegmentIds: ["s2_red", "s2_blue"])
+        SwitchState(id: "s0", position: CGPoint(x: 170, y: 130), activeBranch: 0, branchSegmentIds: ["s0_a", "s0_b"]),
+        SwitchState(id: "s1", position: CGPoint(x: 95, y: 230), activeBranch: 0, branchSegmentIds: ["s1_a", "s1_b"]),
+        SwitchState(id: "s2", position: CGPoint(x: 245, y: 230), activeBranch: 0, branchSegmentIds: ["s2_a", "s2_b"]),
+        SwitchState(id: "s3", position: CGPoint(x: 280, y: 320), activeBranch: 0, branchSegmentIds: ["s3_a", "s3_b"])
     ]
     @Published private(set) var timeRemainingFraction: Double = 1.0
     @Published private(set) var successCount: Int = 0
@@ -101,7 +127,21 @@ final class TrainOfThoughtViewModel: ObservableObject {
     @Published private(set) var collisionCount: Int = 0
     @Published private(set) var lastEventWasGood: Bool?
 
+    /// Live score for the stat bar — mirrors runningScore, floored at
+    /// 0 for display (final score is floored the same way at endGame).
+    @Published private(set) var currentScore: Int = 0
+    /// Streak meter + multiplier, purely for the stat bar — does not
+    /// feed into the point values below.
+    @Published private(set) var meter: Int = 0
+    @Published private(set) var multiplier: Int = 1
+
     var submissionErrorMessage: String? { gameResultViewModel.errorMessage }
+
+    var timeRemainingLabel: String {
+        let remaining = max(0, Self.roundDurationSeconds - elapsed)
+        let clamped = Int(remaining.rounded(.up))
+        return String(format: "%d:%02d", clamped / 60, clamped % 60)
+    }
 
     // MARK: Private state
 
@@ -130,6 +170,9 @@ final class TrainOfThoughtViewModel: ObservableObject {
         mistakeCount = 0
         collisionCount = 0
         runningScore = 0
+        currentScore = 0
+        meter = 0
+        multiplier = 1
         elapsed = 0
         nextSpawnAt = 0.6
         nextTrainId = 0
@@ -189,6 +232,29 @@ final class TrainOfThoughtViewModel: ObservableObject {
         nextTrainId += 1
     }
 
+    /// Registers a successful routing against the streak meter/multiplier
+    /// shown in the stat bar. Purely cosmetic bookkeeping — does not
+    /// change the point value already applied to runningScore.
+    private func registerStreakSuccess() {
+        meter += 1
+        if meter >= Self.meterMax {
+            meter = 0
+            multiplier = min(multiplier + 1, Self.maxMultiplier)
+        }
+    }
+
+    /// Registers a miss (wrong station or collision) against the
+    /// streak meter/multiplier, mirroring Flow Switch's rule: drop the
+    /// partial meter first, and only reduce the multiplier once the
+    /// meter is already empty.
+    private func registerStreakMiss() {
+        if meter > 0 {
+            meter = 0
+        } else {
+            multiplier = max(multiplier - 1, 1)
+        }
+    }
+
     /// Scoring rule: a correctly routed train scores 40 points plus up
     /// to 30 more as a difficulty bonus that scales with elapsed-round
     /// progress (harder, later trains are worth more). A wrong
@@ -215,11 +281,14 @@ final class TrainOfThoughtViewModel: ObservableObject {
                     successCount += 1
                     runningScore += 40 + Int(30 * difficulty)
                     lastEventWasGood = true
+                    registerStreakSuccess()
                 } else {
                     mistakeCount += 1
                     runningScore -= 25
                     lastEventWasGood = false
+                    registerStreakMiss()
                 }
+                currentScore = max(0, runningScore)
                 toRemove.insert(trains[i].id)
             }
         }
@@ -247,6 +316,8 @@ final class TrainOfThoughtViewModel: ObservableObject {
             collisionCount += 1
             runningScore -= 40
             lastEventWasGood = false
+            registerStreakMiss()
+            currentScore = max(0, runningScore)
         }
     }
 

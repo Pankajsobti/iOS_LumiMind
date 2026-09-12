@@ -36,42 +36,50 @@ struct FlowSwitchView: View {
         self.onComplete = onComplete
     }
 
-    var body: some View {
-        ZStack {
-            Self.fieldBackground.ignoresSafeArea()
+   var body: some View {
+    ZStack {
+        Self.fieldBackground.ignoresSafeArea()
 
-            VStack(spacing: 0) {
+        VStack(spacing: 0) {
+            leafField
+            controls
+                .padding(.bottom, DesignSystem.Spacing.lg)
+        }
+
+        VStack {
+            HStack {
+                Spacer()
                 statBar
-                leafField
-                controls
-                    .padding(.bottom, DesignSystem.Spacing.lg)
             }
-
-            if case .submitting = viewModel.phase {
-                statusOverlay(message: "Saving your result…")
-            }
-
-            if case .finished(let score) = viewModel.phase {
-                finishedOverlay(score: score)
-            }
+            Spacer()
         }
-    }
-
-    // MARK: Top stat bar
-
-    private var statBar: some View {
-        HStack(spacing: 0) {
-            statGroup(label: "TIME", value: viewModel.timeRemainingLabel)
-            divider
-            statGroup(label: "SCORE", value: "\(viewModel.score)")
-            divider
-            multiplierGroup
-        }
-        .frame(height: Self.statBarHeight)
-        .background(Color.white.opacity(0.08))
-        .padding(.horizontal, DesignSystem.Spacing.md)
         .padding(.top, DesignSystem.Spacing.sm)
+        .padding(.trailing, DesignSystem.Spacing.md)
+
+        if case .submitting = viewModel.phase {
+            statusOverlay(message: "Saving your result…")
+        }
+
+        if case .finished(let score) = viewModel.phase {
+            finishedOverlay(score: score)
+        }
     }
+}
+
+// MARK: Top stat bar
+
+private var statBar: some View {
+    HStack(spacing: 0) {
+        statGroup(label: "TIME", value: viewModel.timeRemainingLabel)
+        divider
+        statGroup(label: "SCORE", value: "\(viewModel.score)")
+        divider
+        multiplierGroup
+    }
+    .frame(height: Self.statBarHeight)
+    .background(Color.white.opacity(0.12))
+    .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact))
+}
 
     private var divider: some View {
         Rectangle()
@@ -110,26 +118,26 @@ struct FlowSwitchView: View {
 
     // MARK: Leaf field
 
-    private var leafField: some View {
-        GeometryReader { geo in
-            TimelineView(.animation) { context in
-                ZStack {
-                    ForEach(viewModel.leaves) { leaf in
-                        leafView(for: leaf, in: geo.size, at: context.date)
-                    }
+   private var leafField: some View {
+    GeometryReader { geo in
+        TimelineView(.animation) { context in
+            ZStack {
+                ForEach(viewModel.leaves) { leaf in
+                    leafView(for: leaf, in: geo.size, at: context.date)
                 }
-                .frame(width: geo.size.width, height: geo.size.height)
             }
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 20)
-                    .onEnded { value in
-                        viewModel.respond(Self.direction(for: value.translation))
-                    }
-            )
+            .frame(width: geo.size.width, height: geo.size.height)
         }
-        .disabled(viewModel.phase != .playing)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 20)
+                .onEnded { value in
+                    viewModel.respond(Self.direction(for: value.translation))
+                }
+        )
     }
+    .disabled(viewModel.phase != .playing)
+}
 
     private func leafView(for leaf: FlowSwitchViewModel.LeafInstance, in size: CGSize, at date: Date) -> some View {
     let elapsed = date.timeIntervalSince(viewModel.referenceTime)

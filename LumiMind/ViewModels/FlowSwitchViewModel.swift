@@ -4,14 +4,20 @@ import Combine
 
 // MARK: - FlowSwitchViewModel
 //
-// Continuous, timer-bound version: a session runs for `gameDuration`
-// seconds. Each trial shows a GROUP of leaves (not one) that all share
-// the same color/pointing/movement, drifting together — matching how
-// the reference plays. The rule (green = pointing, orange = movement)
-// is communicated only through leaf color; there is no on-screen text
-// hint, so the player has to have internalized the rule from the
-// tutorial. Trials auto-advance on input or per-trial timeout; the
-// session itself ends when the countdown reaches zero.
+// Continuous-flow model: leaves have persistent positions and a
+// constant velocity (one axis at a time, since movement is always
+// axial). Position is NOT re-computed by a timer tick in the
+// ViewModel — it's derived on demand from (anchor + velocity *
+// elapsed-since-referenceTime), wrapped into 0...1 space. The View
+// reads anchors/velocity/referenceTime and animates every frame via
+// TimelineView, so leaves never stop moving, including while waiting
+// for input and across trial boundaries.
+//
+// When a trial ends (answer or timeout), we "freeze" each leaf's
+// currently-interpolated position into a new anchor, reset
+// referenceTime to now, and pick a new velocity for the next trial —
+// so leaves keep flowing continuously through the transition instead
+// of snapping or pausing.
 
 @MainActor
 final class FlowSwitchViewModel: ObservableObject {
@@ -29,12 +35,12 @@ final class FlowSwitchViewModel: ObservableObject {
     enum Direction: CaseIterable, Equatable {
         case up, down, left, right
 
-        var vector: CGSize {
+        var vector: CGVector {
             switch self {
-            case .up:    return CGSize(width: 0, height: -1)
-            case .down:  return CGSize(width: 0, height: 1)
-            case .left:  return CGSize(width: -1, height: 0)
-            case .right: return CGSize(width: 1, height: 0)
+            case .up:    return CGVector(dx: 0, dy: -1)
+            case .down:  return CGVector(dx: 0, dy: 1)
+            case .left:  return CGVector(dx: -1, dy: 0)
+            case .right: return CGVector(dx: 1, dy: 0)
             }
         }
 
@@ -62,23 +68,26 @@ final class FlowSwitchViewModel: ObservableObject {
         }
     }
 
-    // MARK: Leaf instance (one visual leaf within the current group)
+    // MARK: Leaf instance
+    //
+    // `anchorX`/`anchorY` are normalized (0...1) positions as of
+    // `referenceTime`. The View derives the LIVE position by adding
+    // `velocity * elapsedSinceReferenceTime` and wrapping — it never
+    // mutates these directly.
 
     struct LeafInstance: Identifiable, Equatable {
         let id: Int
-        /// Normalized start position within the play area, 0...1.
-        let baseX: CGFloat
-        let baseY: CGFloat
+        var anchorX: CGFloat
+        var anchorY: CGFloat
     }
 
-    // MARK: Trial
+    // MARK: Trial (direction/color state only — position lives separately)
 
     struct Trial {
         let color: LeafColor
         let pointing: Direction
         let movement: Direction
         let isSwitchTrial: Bool
-        let leaves: [LeafInstance]
 
         var correctDirection: Direction { color == .green ? pointing : movement }
         var isCongruent: Bool { pointing == movement }
@@ -90,35 +99,42 @@ final class FlowSwitchViewModel: ObservableObject {
         let incongruentProbability: Double
         let switchProbability: Double
         let responseWindow: Double
-        let driftDistance: Double
+        /// Fraction of field crossed per second.
+        let speed: Double
         let leafCount: Int
     }
 
     private static func profile(for level: Int) -> DifficultyProfile {
         switch level {
-        case 1:  return .init(incongruentProbability: 0.25, switchProbability: 0.25, responseWindow: 1.6, driftDistance: 90,  leafCount: 5)
-        case 2:  return .init(incongruentProbability: 0.35, switchProbability: 0.30, responseWindow: 1.4, driftDistance: 110, leafCount: 6)
-        case 3:  return .init(incongruentProbability: 0.45, switchProbability: 0.35, responseWindow: 1.2, driftDistance: 130, leafCount: 7)
-        case 4:  return .init(incongruentProbability: 0.55, switchProbability: 0.40, responseWindow: 1.0, driftDistance: 150, leafCount: 8)
-        default: return .init(incongruentProbability: 0.65, switchProbability: 0.45, responseWindow: 0.85, driftDistance: 170, leafCount: 9)
+        case 1:  return .init(incongruentProbability: 0.25, switchProbability: 0.25, responseWindow: 1.7, speed: 0.16, leafCount: 6)
+        case 2:  return .init(incongruentProbability: 0.35, switchProbability: 0.30, responseWindow: 1.5, speed: 0.20, leafCount: 7)
+        case 3:  return .init(incongruentProbability: 0.45, switchProbability: 0.35, responseWindow: 1.3, speed: 0.25, leafCount: 8)
+        case 4:  return .init(incongruentProbability: 0.55, switchProbability: 0.40, responseWindow: 1.1, speed: 0.30, leafCount: 9)
+        default: return .init(incongruentProbability: 0.65, switchProbability: 0.45, responseWindow: 0.95, speed: 0.36, leafCount: 10)
         }
     }
 
     // MARK: Tunables
 
-    /// Total session length. Not hard-coded elsewhere — change here only.
     static let gameDurationSeconds: Double = 60
     private static let meterMax = 5
     private static let maxMultiplier = 8
     private static let basePoints = 40
     private static let finalBonusPerMultiplier = 200
     private static let minValidReactionMs: Double = 80
+    /// Minimum normalized spacing enforced when placing/adding leaves.
+    private static let minLeafSpacing: CGFloat = 0.14
 
     // MARK: Published state
 
     @Published private(set) var phase: Phase = .playing
     @Published private(set) var currentTrial: Trial
-    @Published private(set) var leafOffset: CGSize = .zero
+    @Published private(set) var leaves: [LeafInstance] = []
+    /// Normalized units per second. Only one axis is ever non-zero.
+    @Published private(set) var velocity: CGVector = .zero
+    /// Anchors above are valid as of this instant; live position =
+    /// anchor + velocity * (now - referenceTime), wrapped to 0...1.
+    @Published private(set) var referenceTime: Date = Date()
     @Published private(set) var score: Int = 0
     @Published private(set) var multiplier: Int = 1
     @Published private(set) var meter: Int = 0
@@ -141,6 +157,7 @@ final class FlowSwitchViewModel: ObservableObject {
     private var difficultyLevel: Int = 1
     private var rollingResults: [Bool] = []
     private var trialsCompleted = 0
+    private var nextLeafID = 0
 
     private var previousColor: LeafColor?
     private var colorRunLength: Int = 0
@@ -162,8 +179,9 @@ final class FlowSwitchViewModel: ObservableObject {
     init(gameResultViewModel: GameResultViewModel, isFitTest: Bool = false) {
         self.gameResultViewModel = gameResultViewModel
         self.isFitTest = isFitTest
-        self.currentTrial = Trial(color: .green, pointing: .up, movement: .up, isSwitchTrial: false, leaves: [])
+        self.currentTrial = Trial(color: .green, pointing: .up, movement: .up, isSwitchTrial: false)
         gameStartedAt = Date()
+        leaves = Self.makeAnchors(count: Self.profile(for: 1).leafCount, existing: [], nextID: &nextLeafID)
         startSessionTimer()
         beginTrial()
     }
@@ -182,30 +200,48 @@ final class FlowSwitchViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Trial generation
+    // MARK: - Position helpers
 
-    private static func randomLeafPositions(count: Int) -> [LeafInstance] {
-        var positions: [LeafInstance] = []
-        var attempts = 0
-        while positions.count < count && attempts < count * 20 {
-            attempts += 1
-            let x = CGFloat.random(in: 0.08...0.92)
-            let y = CGFloat.random(in: 0.06...0.62)
-            let tooClose = positions.contains { abs($0.baseX - x) < 0.16 && abs($0.baseY - y) < 0.16 }
-            if !tooClose {
-                positions.append(LeafInstance(id: positions.count, baseX: x, baseY: y))
-            }
-        }
-        // Fallback: fill any remainder without the spacing constraint.
-        while positions.count < count {
-            positions.append(LeafInstance(
-                id: positions.count,
-                baseX: CGFloat.random(in: 0.08...0.92),
-                baseY: CGFloat.random(in: 0.06...0.62)
-            ))
-        }
-        return positions
+    private static func wrapped(_ value: CGFloat) -> CGFloat {
+        var v = value.truncatingRemainder(dividingBy: 1)
+        if v < 0 { v += 1 }
+        return v
     }
+
+    /// Live position of a leaf right now, given the current anchor/velocity/referenceTime.
+    private func livePosition(of leaf: LeafInstance, at date: Date = Date()) -> CGPoint {
+        let elapsed = date.timeIntervalSince(referenceTime)
+        let x = Self.wrapped(leaf.anchorX + CGFloat(velocity.dx) * CGFloat(elapsed))
+        let y = Self.wrapped(leaf.anchorY + CGFloat(velocity.dy) * CGFloat(elapsed))
+        return CGPoint(x: x, y: y)
+    }
+
+    /// Builds `count` anchors, keeping as many of `existing`'s (already
+    /// live-resolved) positions as possible and only generating new
+    /// random ones for any shortfall, so growing/shrinking the leaf
+    /// count doesn't restart the whole field.
+    private static func makeAnchors(count: Int, existing: [LeafInstance], nextID: inout Int) -> [LeafInstance] {
+        var result = Array(existing.prefix(count))
+        while result.count < count {
+            var candidate: LeafInstance
+            var attempts = 0
+            repeat {
+                candidate = LeafInstance(
+                    id: nextID,
+                    anchorX: CGFloat.random(in: 0.05...0.95),
+                    anchorY: CGFloat.random(in: 0.05...0.95)
+                )
+                attempts += 1
+            } while attempts < 20 && result.contains(where: {
+                abs($0.anchorX - candidate.anchorX) < minLeafSpacing && abs($0.anchorY - candidate.anchorY) < minLeafSpacing
+            })
+            nextID += 1
+            result.append(candidate)
+        }
+        return result
+    }
+
+    // MARK: - Trial generation
 
     private func generateTrial() -> Trial {
         let profile = Self.profile(for: difficultyLevel)
@@ -234,8 +270,7 @@ final class FlowSwitchViewModel: ObservableObject {
         colorRunLength = (color == previousColor) ? colorRunLength + 1 : 1
         previousColor = color
 
-        let leaves = Self.randomLeafPositions(count: profile.leafCount)
-        return Trial(color: color, pointing: pointing, movement: movement, isSwitchTrial: isSwitch, leaves: leaves)
+        return Trial(color: color, pointing: pointing, movement: movement, isSwitchTrial: isSwitch)
     }
 
     // MARK: - Trial lifecycle
@@ -244,20 +279,27 @@ final class FlowSwitchViewModel: ObservableObject {
         guard phase == .playing, timeRemaining > 0 else { return }
         trialTask?.cancel()
 
-        currentTrial = generateTrial()
-        responseLocked = false
-        leafOffset = .zero
-        lastAnswerFeedback = nil
-        trialStartedAt = Date()
+        // Freeze current live positions into new anchors so leaves
+        // don't jump when velocity changes for the new trial.
+        let now = Date()
+        let frozen = leaves.map { leaf -> LeafInstance in
+            let live = livePosition(of: leaf, at: now)
+            return LeafInstance(id: leaf.id, anchorX: live.x, anchorY: live.y)
+        }
 
         let profile = Self.profile(for: difficultyLevel)
-        let vector = currentTrial.movement.vector
-        withAnimation(.linear(duration: profile.responseWindow)) {
-            leafOffset = CGSize(
-                width: vector.width * profile.driftDistance,
-                height: vector.height * profile.driftDistance
-            )
-        }
+        leaves = Self.makeAnchors(count: profile.leafCount, existing: frozen, nextID: &nextLeafID)
+        referenceTime = now
+
+        currentTrial = generateTrial()
+        velocity = CGVector(
+            dx: currentTrial.movement.vector.dx * profile.speed,
+            dy: currentTrial.movement.vector.dy * profile.speed
+        )
+
+        responseLocked = false
+        lastAnswerFeedback = nil
+        trialStartedAt = now
 
         trialTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(profile.responseWindow * 1_000_000_000))
@@ -328,8 +370,11 @@ final class FlowSwitchViewModel: ObservableObject {
             return
         }
 
+        // Leaves keep flowing continuously through this gap — only the
+        // *decision* pauses briefly (input stays locked) before the
+        // next trial's direction/color takes over.
         Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 200_000_000)
+            try? await Task.sleep(nanoseconds: 150_000_000)
             guard let self, self.phase == .playing else { return }
             self.beginTrial()
         }

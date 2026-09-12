@@ -1,8 +1,6 @@
 import SwiftUI
 
 // MARK: - LeafShape
-//
-// Original teardrop artwork, tip pointing "up" at 0° rotation.
 
 private struct LeafShape: Shape {
     func path(in rect: CGRect) -> Path {
@@ -19,18 +17,19 @@ private struct LeafShape: Shape {
 
 // MARK: - FlowSwitchView
 //
-// Restyle pass: dark navy play field (own token below, not reusing
-// backgroundMain/Onboarding since neither matches this game's look),
-// a TIME | SCORE | multiplier-dots header bar, a scattered group of
-// leaves per trial with no rule-label text, and swipe/button input.
+// RESTYLE: header sections now share a fixed height so the divider
+// can't stretch the row out of alignment (previous bug). Leaf field
+// uses TimelineView(.animation) to derive each leaf's live position
+// every frame from the ViewModel's anchor/velocity/referenceTime —
+// leaves drift continuously and wrap edge-to-edge regardless of
+// whether the player has answered.
 
 struct FlowSwitchView: View {
     @StateObject private var viewModel: FlowSwitchViewModel
     var onComplete: () -> Void
 
-    /// Scoped to this screen only — a dark navy play-field background,
-    /// distinct from DesignSystem's onboarding/main backgrounds.
     private static let fieldBackground = Color(hex: "#101B2C")
+    private static let statBarHeight: CGFloat = 44
 
     init(gameResultViewModel: GameResultViewModel, isFitTest: Bool = false, onComplete: @escaping () -> Void) {
         _viewModel = StateObject(wrappedValue: FlowSwitchViewModel(gameResultViewModel: gameResultViewModel, isFitTest: isFitTest))
@@ -68,7 +67,7 @@ struct FlowSwitchView: View {
             divider
             multiplierGroup
         }
-        .padding(.vertical, DesignSystem.Spacing.sm)
+        .frame(height: Self.statBarHeight)
         .background(Color.white.opacity(0.08))
         .padding(.horizontal, DesignSystem.Spacing.md)
         .padding(.top, DesignSystem.Spacing.sm)
@@ -77,8 +76,7 @@ struct FlowSwitchView: View {
     private var divider: some View {
         Rectangle()
             .fill(Color.white.opacity(0.15))
-            .frame(width: 1)
-            .padding(.vertical, DesignSystem.Spacing.xxs)
+            .frame(width: 1, height: Self.statBarHeight * 0.6)
     }
 
     private func statGroup(label: String, value: String) -> some View {
@@ -91,7 +89,7 @@ struct FlowSwitchView: View {
                 .font(DesignSystem.roundedFont(size: 17, weight: .bold))
                 .foregroundColor(.white)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, minHeight: Self.statBarHeight)
     }
 
     private var multiplierGroup: some View {
@@ -107,29 +105,21 @@ struct FlowSwitchView: View {
                 .font(DesignSystem.roundedFont(size: 15, weight: .bold))
                 .foregroundColor(.white)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, minHeight: Self.statBarHeight)
     }
 
     // MARK: Leaf field
 
     private var leafField: some View {
         GeometryReader { geo in
-            ZStack {
-                ForEach(viewModel.currentTrial.leaves) { leaf in
-                    LeafShape()
-                        .fill(viewModel.currentTrial.color.color)
-                        .frame(width: 56, height: 72)
-                        .overlay(
-                            LeafShape().stroke(Color.white, lineWidth: 3)
-                        )
-                        .rotationEffect(.degrees(viewModel.currentTrial.pointing.rotationDegrees))
-                        .position(
-                            x: leaf.baseX * geo.size.width + viewModel.leafOffset.width,
-                            y: leaf.baseY * geo.size.height + viewModel.leafOffset.height
-                        )
+            TimelineView(.animation) { context in
+                ZStack {
+                    ForEach(viewModel.leaves) { leaf in
+                        leafView(for: leaf, in: geo.size, at: context.date)
+                    }
                 }
+                .frame(width: geo.size.width, height: geo.size.height)
             }
-            .frame(width: geo.size.width, height: geo.size.height)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 20)
@@ -139,6 +129,25 @@ struct FlowSwitchView: View {
             )
         }
         .disabled(viewModel.phase != .playing)
+    }
+
+    private func leafView(for leaf: FlowSwitchViewModel.LeafInstance, in size: CGSize, at date: Date) -> some View {
+        let elapsed = date.timeIntervalSince(viewModel.referenceTime)
+        let x = Self.wrapped(leaf.anchorX + CGFloat(viewModel.velocity.dx) * CGFloat(elapsed))
+        let y = Self.wrapped(leaf.anchorY + CGFloat(viewModel.velocity.dy) * CGFloat(elapsed))
+
+        return LeafShape()
+            .fill(viewModel.currentTrial.color.color)
+            .frame(width: 52, height: 68)
+            .overlay(LeafShape().stroke(Color.white, lineWidth: 3))
+            .rotationEffect(.degrees(viewModel.currentTrial.pointing.rotationDegrees))
+            .position(x: x * size.width, y: y * size.height)
+    }
+
+    private static func wrapped(_ value: CGFloat) -> CGFloat {
+        var v = value.truncatingRemainder(dividingBy: 1)
+        if v < 0 { v += 1 }
+        return v
     }
 
     private static func direction(for translation: CGSize) -> FlowSwitchViewModel.Direction {

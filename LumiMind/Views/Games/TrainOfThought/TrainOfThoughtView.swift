@@ -22,7 +22,7 @@ struct TrainOfThoughtView: View {
 
     var body: some View {
         ZStack {
-            DesignSystem.backgroundMain.ignoresSafeArea()
+            forestBackdrop
 
             VStack(spacing: DesignSystem.Spacing.lg) {
                 header
@@ -44,6 +44,50 @@ struct TrainOfThoughtView: View {
         }
     }
 
+
+
+        // MARK: Forest backdrop
+    //
+    // Self-contained, no image assets — a dark gradient with layered
+    // silhouette trees along the base and a soft glow behind the
+    // board, echoing a toy-diorama night-forest look. Scoped to this
+    // screen only; doesn't touch DesignSystem or other games.
+
+    private var forestBackdrop: some View {
+        ZStack {
+            LinearGradient(
+                colors: [Color(hex: "#1E4034"), Color(hex: "#0E2A20")],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            RadialGradient(
+                colors: [Color(hex: "#2A5C48").opacity(0.6), .clear],
+                center: .center,
+                startRadius: 20,
+                endRadius: 260
+            )
+
+            VStack {
+                Spacer()
+                treeRow(baseY: 40, scale: 0.7, opacity: 0.35)
+                treeRow(baseY: 10, scale: 1.0, opacity: 0.55)
+            }
+        }
+        .ignoresSafeArea()
+    }
+
+    private func treeRow(baseY: CGFloat, scale: CGFloat, opacity: Double) -> some View {
+        HStack(spacing: -12 * scale) {
+            ForEach(0..<7, id: \.self) { i in
+                TreeSilhouette()
+                    .fill(Color(hex: "#173B2C").opacity(opacity))
+                    .frame(width: 46 * scale, height: 70 * scale)
+                    .offset(y: (i % 2 == 0 ? 6 : -4) * scale)
+            }
+        }
+        .padding(.bottom, baseY)
+    }
     // MARK: Header
 
     private var header: some View {
@@ -125,10 +169,15 @@ struct TrainOfThoughtView: View {
                 trainView(train)
             }
         }
+        // NEW
         .frame(width: Self.boardSize.width, height: Self.boardSize.height)
-        .background(Color.white)
+        .background(Color(hex: "#F5F1E4"))
         .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact))
-        .shadow(color: .black.opacity(0.06), radius: 6, y: 3)
+        .overlay(
+            RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact)
+                .stroke(Color(hex: "#D8CDA8"), lineWidth: 2)
+        )
+        .shadow(color: .black.opacity(0.35), radius: 10, y: 5)
     }
 
     // MARK: Toy-railway track rendering
@@ -297,6 +346,33 @@ struct TrainOfThoughtView: View {
             .background(DesignSystem.backgroundOnboarding)
             .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius))
         }
+    }
+}
+
+// MARK: - TreeSilhouette
+//
+// Simple stacked-triangle pine, used only for the forest backdrop.
+
+private struct TreeSilhouette: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let w = rect.width, h = rect.height
+        let tiers = 3
+        let tierHeight = h * 0.7 / CGFloat(tiers)
+
+        for i in 0..<tiers {
+            let top = CGFloat(i) * tierHeight * 0.72
+            let bottom = top + tierHeight
+            let widthFactor = 1.0 - CGFloat(i) * 0.22
+            path.move(to: CGPoint(x: w / 2, y: top))
+            path.addLine(to: CGPoint(x: w / 2 - (w / 2) * widthFactor, y: bottom))
+            path.addLine(to: CGPoint(x: w / 2 + (w / 2) * widthFactor, y: bottom))
+            path.closeSubpath()
+        }
+
+        // Trunk
+        path.addRect(CGRect(x: w * 0.45, y: h * 0.78, width: w * 0.1, height: h * 0.22))
+        return path
     }
 }
 

@@ -3,11 +3,28 @@ import SwiftUI
 // MARK: - TrainOfThoughtView
 //
 // Presentational only — renders TrainOfThoughtViewModel's published
-// state and forwards switch taps into `toggleSwitch(_:)`. Header now
-// mirrors FlowSwitchView's stat bar (TIME / SCORE / multiplier),
-// sitting inside the existing attentionGradient card. Track is drawn
-// as a toy-railway (parallel rails + perpendicular ties) instead of a
-// flat line. Finished overlay unchanged.
+// state and forwards switch taps into `toggleSwitch(_:)`.
+//
+// REVISION (background pass, matching the Splitting Seeds rework):
+// previously the track sat inside its own bordered cream "board" card,
+// floating below a solid teal title card, on a backdrop with trees
+// only along the very bottom edge. Per the reference art, the real
+// game has the track sitting directly on an open forest — no board
+// card at all — with trees scattered across the whole screen and a
+// couple of larger "sentinel" trees anchoring the corners, and a slim
+// translucent HUD bar instead of a solid title card. This revision
+// makes those changes. Track rendering, switches, stations, trains,
+// and all scoring/collision logic in the ViewModel are untouched —
+// only the backdrop, the board's framing, and the header's styling
+// changed.
+//
+// ASSUMPTION (flagging per project convention): dropped the on-screen
+// "Train of Thought" title text, since neither the reference art nor
+// the other games (LostInMigration, SplittingSeeds) show a title
+// during gameplay — the name is already shown on GameIntroView before
+// this screen. Also added a pause button to match those two screens'
+// header convention (no-op placeholder, same as elsewhere). Flag
+// either if you want them handled differently.
 
 struct TrainOfThoughtView: View {
     @StateObject private var viewModel: TrainOfThoughtViewModel
@@ -22,7 +39,8 @@ struct TrainOfThoughtView: View {
 
     var body: some View {
         ZStack {
-            forestBackdrop
+            ForestBackdrop()
+                .ignoresSafeArea()
 
             VStack(spacing: DesignSystem.Spacing.lg) {
                 header
@@ -44,64 +62,45 @@ struct TrainOfThoughtView: View {
         }
     }
 
-
-
-        // MARK: Forest backdrop
+    // MARK: Header (pause + TIME / SCORE / multiplier, glass style)
     //
-    // Self-contained, no image assets — a dark gradient with layered
-    // silhouette trees along the base and a soft glow behind the
-    // board, echoing a toy-diorama night-forest look. Scoped to this
-    // screen only; doesn't touch DesignSystem or other games.
-
-    private var forestBackdrop: some View {
-        ZStack {
-            LinearGradient(
-                colors: [Color(hex: "#1E4034"), Color(hex: "#0E2A20")],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-
-            RadialGradient(
-                colors: [Color(hex: "#2A5C48").opacity(0.6), .clear],
-                center: .center,
-                startRadius: 20,
-                endRadius: 260
-            )
-
-            VStack {
-                Spacer()
-                treeRow(baseY: 40, scale: 0.7, opacity: 0.35)
-                treeRow(baseY: 10, scale: 1.0, opacity: 0.55)
-            }
-        }
-        .ignoresSafeArea()
-    }
-
-    private func treeRow(baseY: CGFloat, scale: CGFloat, opacity: Double) -> some View {
-        HStack(spacing: -12 * scale) {
-            ForEach(0..<7, id: \.self) { i in
-                TreeSilhouette()
-                    .fill(Color(hex: "#173B2C").opacity(opacity))
-                    .frame(width: 46 * scale, height: 70 * scale)
-                    .offset(y: (i % 2 == 0 ? 6 : -4) * scale)
-            }
-        }
-        .padding(.bottom, baseY)
-    }
-    // MARK: Header
+    // Restyled from a solid attentionGradient title card into the same
+    // translucent glass HUD used by LostInMigrationView / the reworked
+    // SplittingSeedsView, so the forest backdrop shows through.
 
     private var header: some View {
-        VStack(spacing: DesignSystem.Spacing.sm) {
-            Text("Train of Thought")
-                .font(DesignSystem.title2)
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        HStack(alignment: .center, spacing: DesignSystem.Spacing.sm) {
+            pauseButton
+
             statRow
+                .padding(.horizontal, DesignSystem.Spacing.md)
+                .padding(.vertical, DesignSystem.Spacing.sm)
+                .background(.ultraThinMaterial)
+                .background(Color.black.opacity(0.22))
+                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact, style: .continuous)
+                        .stroke(.white.opacity(0.18), lineWidth: 1)
+                )
         }
-        .padding(DesignSystem.Spacing.md)
-        .background(DesignSystem.attentionGradient)
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius))
         .padding(.horizontal, DesignSystem.Spacing.md)
+    }
+
+    private var pauseButton: some View {
+        Button(action: { /* pause owned by caller / navigation */ }) {
+            Image(systemName: "pause.fill")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 36, height: 36)
+                .background(.ultraThinMaterial)
+                .background(Color.black.opacity(0.22))
+                .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact, style: .continuous)
+                        .stroke(.white.opacity(0.18), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: Stat row (Flow-Switch-style TIME / SCORE / multiplier)
@@ -153,6 +152,13 @@ struct TrainOfThoughtView: View {
     }
 
     // MARK: Board
+    //
+    // No longer a bordered/shadowed cream card — the track, switches,
+    // stations, and trains now sit directly on the open forest
+    // backdrop, matching the reference art. The fixed frame size is
+    // kept only as the coordinate space the ViewModel's segment/
+    // station/switch points are authored against — it's otherwise
+    // invisible.
 
     private var board: some View {
         ZStack {
@@ -169,15 +175,7 @@ struct TrainOfThoughtView: View {
                 trainView(train)
             }
         }
-        // NEW
         .frame(width: Self.boardSize.width, height: Self.boardSize.height)
-        .background(Color(hex: "#F5F1E4"))
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact))
-        .overlay(
-            RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact)
-                .stroke(Color(hex: "#D8CDA8"), lineWidth: 2)
-        )
-        .shadow(color: .black.opacity(0.35), radius: 10, y: 5)
     }
 
     // MARK: Toy-railway track rendering
@@ -185,9 +183,11 @@ struct TrainOfThoughtView: View {
     // Each segment is drawn as two thin parallel rails with
     // perpendicular wooden ties in between — a small geometry helper
     // computes the perpendicular offset per segment so this works for
-    // any polyline, not just straight single-segment tracks.
+    // any polyline, not just straight single-segment tracks. Colors
+    // lightened slightly from the original so the rails read clearly
+    // against the green backdrop instead of a cream board.
 
-    private static let railColor = Color(hex: "#B7AF9E")
+    private static let railColor = Color(hex: "#E8E1CE")
     private static let tieColor = Color(hex: "#8B6F4E")
     private static let railOffset: CGFloat = 5
     private static let tieSpacing: CGFloat = 16
@@ -345,6 +345,84 @@ struct TrainOfThoughtView: View {
             .frame(maxWidth: 320)
             .background(DesignSystem.backgroundOnboarding)
             .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius))
+        }
+    }
+}
+
+// MARK: - ForestBackdrop
+//
+// Full-screen scene behind the whole game, matching the reference art:
+// a solid pine-green gradient with trees scattered across the entire
+// screen (not just a strip at the bottom) plus two larger "sentinel"
+// trees anchoring the top corners. Scoped to this file only (own
+// color constants / specs), same pattern SplittingSeedsView's
+// ForestBackdrop uses — no new tokens added to DesignSystem.
+
+private struct ForestBackdrop: View {
+    private static let top = Color(hex: "#2F8F5D")
+    private static let bottom = Color(hex: "#123A26")
+
+    private struct TreeSpec: Identifiable {
+        let id = Int.random(in: 0...Int.max)
+        let position: UnitPoint
+        let scale: CGFloat
+        let opacity: Double
+    }
+
+    /// Scattered background trees across the whole screen.
+    private static let scatteredTrees: [TreeSpec] = [
+        TreeSpec(position: UnitPoint(x: 0.1, y: 0.2), scale: 0.55, opacity: 0.35),
+        TreeSpec(position: UnitPoint(x: 0.85, y: 0.15), scale: 0.45, opacity: 0.3),
+        TreeSpec(position: UnitPoint(x: 0.05, y: 0.55), scale: 0.6, opacity: 0.3),
+        TreeSpec(position: UnitPoint(x: 0.92, y: 0.48), scale: 0.5, opacity: 0.3),
+        TreeSpec(position: UnitPoint(x: 0.15, y: 0.85), scale: 0.65, opacity: 0.35),
+        TreeSpec(position: UnitPoint(x: 0.88, y: 0.82), scale: 0.55, opacity: 0.3),
+        TreeSpec(position: UnitPoint(x: 0.5, y: 0.06), scale: 0.4, opacity: 0.22),
+        TreeSpec(position: UnitPoint(x: 0.5, y: 0.94), scale: 0.45, opacity: 0.25),
+        TreeSpec(position: UnitPoint(x: 0.28, y: 0.35), scale: 0.35, opacity: 0.18),
+        TreeSpec(position: UnitPoint(x: 0.72, y: 0.65), scale: 0.35, opacity: 0.18)
+    ]
+
+    /// The two larger, more prominent "sentinel" trees anchoring the
+    /// top corners, matching the reference art's bigger corner pines.
+    private static let sentinelTrees: [TreeSpec] = [
+        TreeSpec(position: UnitPoint(x: 0.02, y: 0.02), scale: 1.4, opacity: 0.55),
+        TreeSpec(position: UnitPoint(x: 0.98, y: 0.03), scale: 1.2, opacity: 0.5)
+    ]
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                LinearGradient(colors: [Self.top, Self.bottom], startPoint: .top, endPoint: .bottom)
+
+                RadialGradient(
+                    colors: [Color(hex: "#3FAE73").opacity(0.35), .clear],
+                    center: .center,
+                    startRadius: 20,
+                    endRadius: geo.size.width
+                )
+
+                ForEach(Self.scatteredTrees) { tree in
+                    TreeSilhouette()
+                        .fill(Color(hex: "#0E2A1C").opacity(tree.opacity))
+                        .frame(width: 46 * tree.scale, height: 70 * tree.scale)
+                        .position(x: geo.size.width * tree.position.x, y: geo.size.height * tree.position.y)
+                }
+
+                ForEach(Self.sentinelTrees) { tree in
+                    TreeSilhouette()
+                        .fill(Color(hex: "#173B2C").opacity(tree.opacity))
+                        .frame(width: 46 * tree.scale, height: 70 * tree.scale)
+                        .position(x: geo.size.width * tree.position.x, y: geo.size.height * tree.position.y)
+                }
+
+                RadialGradient(
+                    colors: [.clear, .black.opacity(0.22)],
+                    center: .center,
+                    startRadius: geo.size.width * 0.4,
+                    endRadius: geo.size.width * 1.1
+                )
+            }
         }
     }
 }

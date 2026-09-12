@@ -53,13 +53,6 @@ struct SplittingSeedsView: View {
         self.onComplete = onComplete
     }
 
-    /// True once the live left/right split equals the round's two targets
-    /// (order-independent) — drives the "ready to lock" glow before the
-    /// user even taps. Purely a display hint; `lockIn()` still re-checks.
-    private var isSplitMatchingTarget: Bool {
-        [viewModel.leftCount, viewModel.rightCount].sorted() == [viewModel.targetGroupA, viewModel.targetGroupB].sorted()
-    }
-
     var body: some View {
         ZStack {
             ForestBackdrop(phase: ambientPhase)
@@ -224,49 +217,39 @@ struct SplittingSeedsView: View {
     }
 
     // MARK: Target banner
+    //
+    // Static instruction pill — no bounce animation, no correctness hint.
+    // Restyled as a dark glass pill (matches the header HUD) instead of
+    // the previous white capsule, which clashed with the forest theme.
+    // Only shows the target numbers; whether the current split matches
+    // is never revealed here — that only surfaces after `lockIn()`.
 
     private var targetBanner: some View {
         HStack(spacing: DesignSystem.Spacing.xs) {
-            ZStack {
-                Circle()
-                    .fill(DesignSystem.backgroundOnboarding.opacity(0.16))
-                    .frame(width: 28, height: 28)
-                Image(systemName: "divide.circle.fill")
-                    .foregroundColor(DesignSystem.backgroundOnboarding.opacity(0.8))
-            }
+            Image(systemName: "divide.circle.fill")
+                .foregroundColor(.white.opacity(0.85))
 
             Text("Split into ")
-                .foregroundColor(DesignSystem.backgroundOnboarding.opacity(0.8))
+                .foregroundColor(.white.opacity(0.85))
             + Text("\(viewModel.targetGroupA)")
-                .foregroundColor(DesignSystem.backgroundOnboarding)
+                .foregroundColor(.white)
                 .fontWeight(.bold)
             + Text(" and ")
-                .foregroundColor(DesignSystem.backgroundOnboarding.opacity(0.8))
+                .foregroundColor(.white.opacity(0.85))
             + Text("\(viewModel.targetGroupB)")
-                .foregroundColor(DesignSystem.backgroundOnboarding)
+                .foregroundColor(.white)
                 .fontWeight(.bold)
-
-            if isSplitMatchingTarget && viewModel.phase == .playing {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(Color(hex: "#2ECC71"))
-                    .transition(.scale.combined(with: .opacity))
-            }
         }
         .font(DesignSystem.headline)
         .padding(.horizontal, DesignSystem.Spacing.lg)
         .padding(.vertical, DesignSystem.Spacing.sm)
         .background(.ultraThinMaterial)
-        .background(.white.opacity(0.35))
+        .background(Color.black.opacity(0.22))
         .clipShape(Capsule())
         .overlay(
             Capsule()
-                .stroke(isSplitMatchingTarget ? Color(hex: "#2ECC71").opacity(0.7) : .white.opacity(0.55), lineWidth: 1.5)
+                .stroke(.white.opacity(0.18), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.08), radius: 8, y: 4)
-        .id("\(viewModel.targetGroupA)-\(viewModel.targetGroupB)")
-        .transition(.scale.combined(with: .opacity))
-        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: viewModel.targetGroupA)
-        .animation(.easeInOut(duration: 0.25), value: isSplitMatchingTarget)
     }
 
     // MARK: Play field
@@ -307,9 +290,6 @@ struct SplittingSeedsView: View {
                         .id(seed.id)
                 }
                 .animation(.spring(response: 0.4, dampingFraction: 0.65), value: viewModel.seeds)
-
-                countBubble(count: viewModel.leftCount, isLeft: true, center: center, playRadius: playRadius, isMatched: isSplitMatchingTarget)
-                countBubble(count: viewModel.rightCount, isLeft: false, center: center, playRadius: playRadius, isMatched: isSplitMatchingTarget)
 
                 ConfettiBurst(trigger: confettiBurstID)
 
@@ -478,32 +458,6 @@ struct SplittingSeedsView: View {
             .overlay(Circle().stroke(Color(hex: "#4A2E17").opacity(0.6), lineWidth: 1))
     }
 
-    private func countBubble(count: Int, isLeft: Bool, center: CGPoint, playRadius: CGFloat, isMatched: Bool) -> some View {
-        let perpendicular = viewModel.stickAngle + (isLeft ? .pi / 2 : -.pi / 2)
-        let r = playRadius * 0.55
-        let position = CGPoint(
-            x: center.x + r * cos(perpendicular),
-            y: center.y + r * sin(perpendicular)
-        )
-        return Text("\(count)")
-            .font(DesignSystem.roundedFont(size: 17, weight: .bold))
-            .foregroundColor(.white)
-            .frame(width: 36, height: 36)
-            .background(isMatched ? AnyView(Color(hex: "#2ECC71")) : AnyView(DesignSystem.mathGradient))
-            .clipShape(Circle())
-            .overlay(Circle().stroke(.white, lineWidth: 2))
-            .overlay(
-                Circle()
-                    .stroke(Color(hex: "#2ECC71").opacity(isMatched ? 0.8 : 0), lineWidth: 4)
-                    .scaleEffect(isMatched ? 1.28 : 1.0)
-            )
-            .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
-            .position(position)
-            .animation(.interpolatingSpring(stiffness: 260, damping: 22), value: position.x)
-            .animation(.spring(response: 0.25, dampingFraction: 0.45), value: count)
-            .animation(.easeInOut(duration: 0.3), value: isMatched)
-    }
-
     private func feedbackBanner(correct: Bool, center: CGPoint) -> some View {
         HStack(spacing: DesignSystem.Spacing.xs) {
             Image(systemName: correct ? "checkmark.circle.fill" : "xmark.circle.fill")
@@ -523,13 +477,19 @@ struct SplittingSeedsView: View {
     }
 
     // MARK: Lock-in button
+    //
+    // Static appearance regardless of whether the current split happens
+    // to match the target — no pulsing glow or icon swap beforehand,
+    // since that was effectively giving away the answer. The only
+    // feedback on correctness now comes from `feedbackBanner` after the
+    // user actually taps this and `lockIn()` runs.
 
     private var lockInButton: some View {
         Button {
             viewModel.lockIn()
         } label: {
             HStack(spacing: DesignSystem.Spacing.xs) {
-                Image(systemName: isSplitMatchingTarget ? "checkmark.seal.fill" : "arrow.left.arrow.right")
+                Image(systemName: "arrow.left.arrow.right")
                     .font(.system(size: 16, weight: .bold))
                 Text("Lock In Split")
                     .font(DesignSystem.buttonLabel)
@@ -539,26 +499,11 @@ struct SplittingSeedsView: View {
             .padding(.vertical, DesignSystem.Spacing.md)
         }
         .buttonStyle(PressableButtonStyle())
-        .background(
-            ZStack {
-                DesignSystem.primaryGradient
-                if isSplitMatchingTarget {
-                    LinearGradient(colors: [.white.opacity(0.32), .clear], startPoint: .leading, endPoint: .trailing)
-                        .blendMode(.overlay)
-                }
-            }
-        )
+        .background(DesignSystem.primaryGradient)
         .clipShape(Capsule())
-        .overlay(
-            Capsule()
-                .stroke(Color(hex: "#2ECC71").opacity(isSplitMatchingTarget ? 0.9 : 0), lineWidth: 3)
-                .scaleEffect(isSplitMatchingTarget ? 1.04 : 1.0)
-                .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: isSplitMatchingTarget)
-        )
-        .shadow(color: Color(hex: "#6D5DE7").opacity(isSplitMatchingTarget ? 0.55 : 0.35), radius: isSplitMatchingTarget ? 16 : 10, y: 5)
+        .shadow(color: Color(hex: "#6D5DE7").opacity(0.35), radius: 10, y: 5)
         .padding(.horizontal, DesignSystem.Spacing.md)
         .disabled(viewModel.phase != .playing)
-        .animation(.easeInOut(duration: 0.25), value: isSplitMatchingTarget)
     }
 
     // MARK: Overlays

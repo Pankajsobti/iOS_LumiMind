@@ -2,13 +2,15 @@ import SwiftUI
 
 // MARK: - BrainShiftView
 //
-// REWRITE to match the actual "Brain Shift" task-switching design doc:
-// a rule indicator (COLOR / SHAPE) that flashes when it changes, a
-// two-attribute stimulus (shape + color), and a variable number of
-// text-labeled answer buttons — never color-only, per the
-// colorblind-accessibility requirement. Countdown, timer bar, score,
-// and streak all come from BrainShiftViewModel; this view is
-// presentation-only, matching the rest of the games.
+// Skinned to match the reference screenshot: a teal wood-grain
+// backdrop, a header with a dark pause square + TIME/SCORE stat
+// pills (mirrors LostInMigrationView's `header`/`statPill`), two
+// stacked white stimulus cards (active on top with its rule question
+// above it, the queued one below with ITS question underneath), and a
+// flat navy NO/YES split bar. Original hand-painted grain texture via
+// Canvas — same technique as LostInMigrationView's `grainOverlay`,
+// just horizontal wood-grain streaks instead of a paper-dot pattern —
+// not a copy of any reference art asset.
 
 struct BrainShiftView: View {
     @StateObject private var viewModel: BrainShiftViewModel
@@ -19,32 +21,44 @@ struct BrainShiftView: View {
         self.onComplete = onComplete
     }
 
+    // MARK: Palette (local to this screen — original, not copied from any reference asset)
+
+    private static let backdropTop = Color(hex: "#2E9AA0")
+    private static let backdropBottom = Color(hex: "#1B6E74")
+    private static let stimulusColor = Color(hex: "#F2A93B")
+    private static let cyanAccent = Color(hex: "#29C7EE")
+    private static let barColor = Color(hex: "#0B242A")
+    private static let statBoxColor = Color.black.opacity(0.22)
+
     var body: some View {
         ZStack {
-            DesignSystem.backgroundMain.ignoresSafeArea()
+            backdrop
 
-            VStack(spacing: DesignSystem.Spacing.lg) {
+            VStack(spacing: 0) {
                 header
-                ruleBanner
+                    .padding(.horizontal, DesignSystem.Spacing.md)
+                    .padding(.top, DesignSystem.Spacing.md)
 
-                Spacer()
+                Spacer(minLength: DesignSystem.Spacing.xl)
 
-                stimulusCard
+                VStack(spacing: DesignSystem.Spacing.sm) {
+                    questionBubble(text: viewModel.currentTrial.rule.question, highlighted: viewModel.justSwitchedRule)
+                    stimulusCard(trial: viewModel.currentTrial)
+                }
 
-                feedbackLabel
-                    .frame(height: 22)
+                Spacer(minLength: DesignSystem.Spacing.lg)
 
-                Spacer()
+                VStack(spacing: DesignSystem.Spacing.sm) {
+                    stimulusCard(trial: nil)
+                    questionBubble(text: viewModel.nextTrial.rule.question, highlighted: false)
+                }
 
-                answerButtons
+                Spacer(minLength: DesignSystem.Spacing.xl)
+
+                answerBar
             }
-            .padding(.vertical, DesignSystem.Spacing.lg)
-            .opacity(isPlayable ? 1 : 0.15)
-            .disabled(!isPlayable)
-
-            if case .countdown(let tick) = viewModel.phase {
-                countdownOverlay(tick: tick)
-            }
+            .opacity(viewModel.phase == .playing ? 1 : 0.15)
+            .disabled(viewModel.phase != .playing)
 
             if case .submitting = viewModel.phase {
                 statusOverlay(message: "Saving your result…")
@@ -56,127 +70,131 @@ struct BrainShiftView: View {
         }
     }
 
-    private var isPlayable: Bool { viewModel.phase == .playing }
+    // MARK: Backdrop — original teal wood-grain texture (Canvas-painted, same technique as LostInMigrationView's grainOverlay)
 
-    // MARK: Header
-
-    private var header: some View {
-        VStack(spacing: DesignSystem.Spacing.sm) {
-            HStack {
-                Text("Brain Shift")
-                    .font(DesignSystem.title2)
-                    .foregroundColor(.white)
-                Spacer()
-                Text("\(viewModel.currentTrial.roundNumber)/\(BrainShiftViewModel.totalRounds)")
-                    .font(DesignSystem.roundedFont(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
-            }
-            HStack {
-                Text("Score \(viewModel.score)")
-                    .font(DesignSystem.roundedFont(size: 14, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.9))
-                Spacer()
-                if viewModel.streak > 1 {
-                    Text("🔥 ×\(viewModel.streak)")
-                        .font(DesignSystem.roundedFont(size: 14, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.9))
+    private var backdrop: some View {
+        ZStack {
+            LinearGradient(colors: [Self.backdropTop, Self.backdropBottom], startPoint: .top, endPoint: .bottom)
+            Canvas { context, size in
+                var rng = BrainShiftGrainRNG(seed: 7)
+                for _ in 0..<34 {
+                    let y = CGFloat.random(in: 0...size.height, using: &rng)
+                    let thickness = CGFloat.random(in: 1...3, using: &rng)
+                    let opacity = Double.random(in: 0.04...0.10, using: &rng)
+                    var path = Path()
+                    path.move(to: CGPoint(x: 0, y: y))
+                    path.addCurve(
+                        to: CGPoint(x: size.width, y: y + CGFloat.random(in: -14...14, using: &rng)),
+                        control1: CGPoint(x: size.width * 0.33, y: y + CGFloat.random(in: -10...10, using: &rng)),
+                        control2: CGPoint(x: size.width * 0.66, y: y + CGFloat.random(in: -10...10, using: &rng))
+                    )
+                    context.stroke(path, with: .color(.black.opacity(opacity)), lineWidth: thickness)
                 }
             }
-            ProgressBar(fraction: viewModel.timeRemainingFraction)
+            .allowsHitTesting(false)
         }
-        .padding(DesignSystem.Spacing.md)
-        .background(DesignSystem.flexibilityGradient)
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius))
-        .padding(.horizontal, DesignSystem.Spacing.md)
+        .ignoresSafeArea()
     }
 
-    // MARK: Rule banner (doc section 8 — animates on switch)
+    // MARK: Header (mirrors LostInMigrationView's header/statPill pattern)
 
-    private var ruleBanner: some View {
-        Text("RULE: \(viewModel.currentTrial.rule.label)")
-            .font(DesignSystem.headline)
-            .foregroundColor(.white)
-            .padding(.horizontal, DesignSystem.Spacing.lg)
-            .padding(.vertical, DesignSystem.Spacing.xs)
-            .background(DesignSystem.flexibilityGradient.opacity(0.7))
-            .clipShape(Capsule())
-            .scaleEffect(viewModel.justSwitchedRule ? 1.12 : 1.0)
-            .animation(.spring(response: 0.35, dampingFraction: 0.6), value: viewModel.justSwitchedRule)
-            .accessibilityLabel("Current rule: \(viewModel.currentTrial.rule.label.capitalized)")
+    private var header: some View {
+        HStack(spacing: DesignSystem.Spacing.md) {
+            Button(action: { /* pause owned by caller / navigation */ }) {
+                Image(systemName: "pause.fill")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(Self.cyanAccent)
+                    .frame(width: 34, height: 34)
+                    .background(Self.barColor)
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            statBox(label: "TIME", value: viewModel.timeRemainingLabel)
+            statBox(label: "SCORE", value: "\(viewModel.score)")
+        }
+    }
+
+    private func statBox(label: String, value: String) -> some View {
+        HStack(spacing: 6) {
+            Text(label)
+                .font(DesignSystem.roundedFont(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.75))
+            Text(value)
+                .font(DesignSystem.roundedFont(size: 15, weight: .bold))
+                .foregroundColor(.white)
+        }
+        .padding(.horizontal, DesignSystem.Spacing.sm)
+        .padding(.vertical, 6)
+        .background(Self.statBoxColor)
+    }
+
+    // MARK: Question bubble
+
+    private func questionBubble(text: String, highlighted: Bool) -> some View {
+        Text(text)
+            .font(DesignSystem.roundedFont(size: 14, weight: .semibold))
+            .foregroundColor(.white.opacity(0.9))
+            .padding(.horizontal, DesignSystem.Spacing.md)
+            .padding(.vertical, 6)
+            .background(Color.black.opacity(highlighted ? 0.34 : 0.18))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .scaleEffect(highlighted ? 1.06 : 1.0)
+            .animation(.spring(response: 0.35, dampingFraction: 0.6), value: highlighted)
+            .accessibilityLabel(text)
     }
 
     // MARK: Stimulus card
-
-    private var stimulusCard: some View {
-        let stimulus = viewModel.currentTrial.stimulus
-        return RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius)
-            .fill(DesignSystem.backgroundOnboarding.opacity(0.06))
-            .frame(width: 160, height: 160)
-            .overlay {
-                Image(systemName: stimulus.shape.systemImageName)
-                    .resizable()
-                    .scaledToFit()
-                    .foregroundColor(stimulus.color.color)
-                    .frame(width: 90, height: 90)
-            }
-            .accessibilityElement()
-            .accessibilityLabel(stimulus.accessibilityLabel)
-    }
+    //
+    // `trial == nil` renders the blank "on deck" card from the
+    // reference screenshot's lower slot.
 
     @ViewBuilder
-    private var feedbackLabel: some View {
-        if let correct = viewModel.lastAnswerWasCorrect {
-            Text(correct ? "✓ Correct  +\(viewModel.lastScoreDelta)" : "✗ Not quite")
-                .font(DesignSystem.headline)
-                .foregroundColor(correct ? Color(hex: "#2ECC71") : Color(hex: "#FF6B4A"))
-        } else {
-            Text(" ")
-                .font(DesignSystem.headline)
-        }
-    }
-
-    // MARK: Answer buttons (doc section 9, text-labeled per section 28)
-
-    private var answerButtons: some View {
-        VStack(spacing: DesignSystem.Spacing.sm) {
-            ForEach(viewModel.currentTrial.options, id: \.self) { option in
-                answerButton(option)
+    private func stimulusCard(trial: BrainShiftViewModel.Trial?) -> some View {
+        RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact)
+            .fill(Color.white)
+            .frame(width: 190, height: 150)
+            .overlay {
+                if let trial {
+                    Text(trial.label)
+                        .font(DesignSystem.roundedFont(size: 48, weight: .bold))
+                        .foregroundColor(Self.stimulusColor)
+                        .accessibilityLabel(trial.accessibilityLabel)
+                        .id(trial.label + "\(trial.rule)")
+                        .transition(.opacity)
+                }
             }
-        }
-        .padding(.horizontal, DesignSystem.Spacing.lg)
+            .animation(.easeOut(duration: 0.2), value: trial?.label)
+            .shadow(color: .black.opacity(0.18), radius: 6, y: 3)
     }
 
-    private func answerButton(_ option: String) -> some View {
+    // MARK: Answer bar
+
+    private var answerBar: some View {
+        HStack(spacing: 0) {
+            answerButton(label: "NO", isYes: false)
+            Rectangle().fill(Color.white.opacity(0.15)).frame(width: 1)
+            answerButton(label: "YES", isYes: true)
+        }
+        .frame(height: 64)
+        .background(Self.barColor)
+    }
+
+    private func answerButton(label: String, isYes: Bool) -> some View {
         Button {
-            viewModel.answer(option)
+            viewModel.answer(isYes: isYes)
         } label: {
-            Text(option)
-                .font(DesignSystem.buttonLabel)
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, DesignSystem.Spacing.md)
+            Text(label)
+                .font(DesignSystem.roundedFont(size: 20, weight: .bold))
+                .foregroundColor(Self.cyanAccent)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .buttonStyle(.plain)
-        .background(DesignSystem.flexibilityGradient)
-        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact))
-        .accessibilityLabel(option.capitalized)
+        .accessibilityLabel(label)
     }
 
-    // MARK: Countdown overlay (doc section 4)
-
-    private func countdownOverlay(tick: Int) -> some View {
-        ZStack {
-            DesignSystem.backgroundMain.opacity(0.92).ignoresSafeArea()
-            Text(tick == 0 ? "GO" : "\(tick)")
-                .font(DesignSystem.roundedFont(size: 64, weight: .bold))
-                .foregroundColor(.white)
-                .id(tick)
-                .transition(.scale.combined(with: .opacity))
-                .animation(.easeOut(duration: 0.3), value: tick)
-        }
-    }
-
-    // MARK: Overlays
+    // MARK: Overlays (unchanged pattern from the other games)
 
     private func statusOverlay(message: String) -> some View {
         ZStack {
@@ -241,20 +259,19 @@ struct BrainShiftView: View {
     }
 }
 
-// MARK: - ProgressBar
+// MARK: - BrainShiftGrainRNG
+//
+// Deterministic RNG so the backdrop's grain streaks render the same
+// pattern every redraw instead of flickering — same role as
+// MigrationGrainRNG in LostInMigrationSprites.swift, named distinctly
+// to avoid a redeclaration collision with that file.
 
-private struct ProgressBar: View {
-    let fraction: Double
-
-    var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule().fill(.white.opacity(0.3))
-                Capsule().fill(.white)
-                    .frame(width: geo.size.width * max(0, min(1, fraction)))
-            }
-        }
-        .frame(height: 6)
+private struct BrainShiftGrainRNG: RandomNumberGenerator {
+    private var state: UInt64
+    init(seed: UInt64) { self.state = seed == 0 ? 1 : seed }
+    mutating func next() -> UInt64 {
+        state = state &* 6364136223846793005 &+ 1442695040888963407
+        return state
     }
 }
 

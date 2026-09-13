@@ -115,6 +115,7 @@ enum GameCatalog {
             name: "Train of Thought",
             category: .attention,
             iconName: "tram.fill",
+            customImageName: "train",   // ← add this
             shortDescription: "Route trains to their matching stations.",
             rules: [
                 "Trains enter and travel the tracks automatically.",
@@ -132,6 +133,7 @@ enum GameCatalog {
             name: "Flow Switch",
             category: .flexibility,
             iconName: "leaf.fill",
+            customImageName: "leaves",   // ← add this
             shortDescription: "Follow the color's rule as leaves point one way and drift another.",
             rules: [
                 "Green leaves: respond to which way they're pointing.",

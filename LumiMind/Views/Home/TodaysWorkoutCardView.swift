@@ -81,10 +81,19 @@ struct TodaysWorkoutCardView: View {
             ForEach(exercises) { game in
                 Button { onSelectExercise(game) } label: {
                     HStack(spacing: DesignSystem.Spacing.sm) {
-                        Circle()
-                            .fill(game.category.gradient)
-                            .frame(width: 44, height: 44)
-                            .overlay(Image(systemName: game.iconName).foregroundColor(.white))
+                        Group {
+                            if let customImageName = game.customImageName {
+                                Image(customImageName)
+                                    .resizable()
+                                    .scaledToFill()
+                            } else {
+                                Circle()
+                                    .fill(game.category.gradient)
+                                    .overlay(Image(systemName: game.iconName).foregroundColor(.white))
+                            }
+                        }
+                        .frame(width: 44, height: 44)
+                        .clipShape(Circle())
 
                         VStack(alignment: .leading, spacing: 0) {
                             Text(game.name)

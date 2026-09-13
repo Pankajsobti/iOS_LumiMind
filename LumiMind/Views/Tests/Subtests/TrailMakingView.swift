@@ -4,8 +4,9 @@ import UIKit
 // MARK: - TrailMakingView
 //
 // Connect-the-dots subtest. Mode A: tap 1→2→3… in order. Mode B:
-// alternates number/letter (1→A→2→B…). Nodes are scattered at fixed
-// pseudo-random positions per mode so layout is stable across runs.
+// alternates number/letter (1→A→2→B…). Node layout is randomized
+// fresh each time the view appears (see generatePositions) so the
+// pattern is never the same twice.
 
 struct TrailMakingView: View {
     enum Mode {
@@ -63,6 +64,8 @@ struct TrailMakingView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
+                backgroundView
+
                 if nodePositions.count > 1 {
                     TrailPathShape(points: nodePositions, progress: pathProgress)
                         .stroke(
@@ -82,7 +85,7 @@ struct TrailMakingView: View {
             .frame(width: geo.size.width, height: geo.size.height)
             .onAppear {
                 if nodePositions.isEmpty {
-                    nodePositions = Self.generatePositions(count: mode.nodeCount, in: geo.size, seed: mode == .a ? 1 : 2)
+                    nodePositions = Self.generatePositions(count: mode.nodeCount, in: geo.size)
                 }
                 pulseActive = true
                 startTimer()
@@ -95,6 +98,33 @@ struct TrailMakingView: View {
                 .padding(.top, DesignSystem.Spacing.xxs)
         }
     }
+
+    // MARK: - Background
+
+    private var backgroundView: some View {
+        ZStack {
+            DesignSystem.backgroundMain
+
+            Circle()
+                .fill(DesignSystem.attentionGradient)
+                .frame(width: 260, height: 260)
+                .blur(radius: 80)
+                .opacity(0.16)
+                .offset(x: -130, y: -220)
+
+            Circle()
+                .fill(DesignSystem.primaryGradient)
+                .frame(width: 220, height: 220)
+                .blur(radius: 70)
+                .opacity(0.12)
+                .offset(x: 130, y: 240)
+
+            DotGridBackground(color: DesignSystem.backgroundOnboarding.opacity(0.05))
+        }
+        .ignoresSafeArea()
+    }
+
+    // MARK: - Timer ring
 
     private var timerRing: some View {
         let fraction = timeLimit > 0 ? CGFloat(timeRemaining) / CGFloat(timeLimit) : 0
@@ -118,6 +148,8 @@ struct TrailMakingView: View {
         .frame(width: 44, height: 44)
     }
 
+    // MARK: - Node
+
     private func nodeView(index: Int, label: String) -> some View {
         let isCompleted = index < nextExpectedIndex
         let isNext = index == nextExpectedIndex
@@ -137,24 +169,44 @@ struct TrailMakingView: View {
                     )
             }
 
-            Text(label)
-                .font(DesignSystem.headline)
-                .foregroundColor(isCompleted ? .white : DesignSystem.backgroundOnboarding)
+            Circle()
+                .fill(
+                    isCompleted
+                        ? AnyShapeStyle(DesignSystem.attentionGradient)
+                        : AnyShapeStyle(
+                            RadialGradient(
+                                colors: [Color.white, Color(hex: "#DCEFEA")],
+                                center: .topLeading,
+                                startRadius: 2,
+                                endRadius: 34
+                            )
+                          )
+                )
                 .frame(width: 40, height: 40)
-                .background(
-                    isCompleted ? AnyShapeStyle(DesignSystem.attentionGradient) : AnyShapeStyle(Color.white)
+                .overlay(
+                    // Glass highlight
+                    Circle()
+                        .trim(from: 0.5, to: 0.97)
+                        .stroke(Color.white.opacity(isCompleted ? 0.5 : 0.9), lineWidth: 3)
+                        .rotationEffect(.degrees(-45))
+                        .blur(radius: 0.5)
+                        .padding(3)
                 )
                 .overlay(
                     Circle().stroke(
-                        isWrong ? Color.red : DesignSystem.backgroundOnboarding.opacity(0.15),
+                        isWrong ? Color.red : DesignSystem.backgroundOnboarding.opacity(0.12),
                         lineWidth: isWrong ? 2.5 : 1
                     )
                 )
-                .clipShape(Circle())
+                .overlay(
+                    Text(label)
+                        .font(DesignSystem.headline)
+                        .foregroundColor(isCompleted ? .white : DesignSystem.backgroundOnboarding)
+                )
                 .shadow(
-                    color: isCompleted ? DesignSystem.backgroundOnboarding.opacity(0.15) : .black.opacity(0.05),
-                    radius: isCompleted ? 4 : 2,
-                    y: 1
+                    color: isCompleted ? Color(hex: "#00C2A8").opacity(0.4) : Color(hex: "#00C2A8").opacity(0.15),
+                    radius: isCompleted ? 6 : 3,
+                    y: 2
                 )
                 .scaleEffect(isBouncing ? 1.25 : 1.0)
                 .modifier(ShakeEffect(animatableData: isWrong ? 1 : 0))
@@ -216,14 +268,46 @@ struct TrailMakingView: View {
         onComplete(nextExpectedIndex, labels.count, duration)
     }
 
-    private static func generatePositions(count: Int, in size: CGSize, seed: Int) -> [CGPoint] {
-        var generator = SeededGenerator(seed: seed)
+    /// Generates a fresh random layout every call — no fixed seed —
+    /// so the pattern differs on every playthrough. Uses simple
+    /// rejection sampling to keep nodes from spawning too close
+    /// together or overlapping.
+    private static func generatePositions(count: Int, in size: CGSize) -> [CGPoint] {
         var points: [CGPoint] = []
         let margin: CGFloat = 30
+        let minDistance: CGFloat = 62
+        let maxAttemptsPerPoint = 200
+
+        let usableWidth = max(margin + 1, size.width - margin)
+        let usableHeight = max(margin + 1, size.height - margin)
+
         for _ in 0..<count {
-            let x = CGFloat.random(in: margin...(max(margin + 1, size.width - margin)), using: &generator)
-            let y = CGFloat.random(in: margin...(max(margin + 1, size.height - margin)), using: &generator)
-            points.append(CGPoint(x: x, y: y))
+            var placed = false
+            var attempt = 0
+            while !placed && attempt < maxAttemptsPerPoint {
+                let candidate = CGPoint(
+                    x: CGFloat.random(in: margin...usableWidth),
+                    y: CGFloat.random(in: margin...usableHeight)
+                )
+                let farEnough = points.allSatisfy { existing in
+                    let dx = existing.x - candidate.x
+                    let dy = existing.y - candidate.y
+                    return (dx * dx + dy * dy) >= (minDistance * minDistance)
+                }
+                if farEnough {
+                    points.append(candidate)
+                    placed = true
+                }
+                attempt += 1
+            }
+            if !placed {
+                // Fallback: accept a random point anyway rather than
+                // looping forever if the canvas is too small/crowded.
+                points.append(CGPoint(
+                    x: CGFloat.random(in: margin...usableWidth),
+                    y: CGFloat.random(in: margin...usableHeight)
+                ))
+            }
         }
         return points
     }
@@ -269,6 +353,31 @@ private struct TrailPathShape: Shape {
     }
 }
 
+// MARK: - DotGridBackground
+//
+// Faint dot-grid texture drawn once per frame via Canvas, used to give
+// the subtest background subtle depth instead of a flat fill.
+private struct DotGridBackground: View {
+    var spacing: CGFloat = 26
+    var dotSize: CGFloat = 2
+    var color: Color
+
+    var body: some View {
+        Canvas { context, size in
+            var x: CGFloat = spacing / 2
+            while x < size.width {
+                var y: CGFloat = spacing / 2
+                while y < size.height {
+                    let rect = CGRect(x: x - dotSize / 2, y: y - dotSize / 2, width: dotSize, height: dotSize)
+                    context.fill(Path(ellipseIn: rect), with: .color(color))
+                    y += spacing
+                }
+                x += spacing
+            }
+        }
+    }
+}
+
 // MARK: - ShakeEffect
 //
 // Horizontal oscillation used to signal a wrong tap on a node.
@@ -280,18 +389,5 @@ private struct ShakeEffect: GeometryEffect {
     func effectValue(size: CGSize) -> ProjectionTransform {
         let translation = travelDistance * sin(animatableData * .pi * shakesPerUnit)
         return ProjectionTransform(CGAffineTransform(translationX: translation, y: 0))
-    }
-}
-
-/// Minimal seeded RNG so node layout is stable across app launches
-/// for a given mode, rather than reshuffling every run.
-private struct SeededGenerator: RandomNumberGenerator {
-    private var state: UInt64
-    init(seed: Int) { state = UInt64(bitPattern: Int64(seed)) &+ 0x9E3779B97F4A7C15 }
-    mutating func next() -> UInt64 {
-        state ^= state << 13
-        state ^= state >> 7
-        state ^= state << 17
-        return state
     }
 }

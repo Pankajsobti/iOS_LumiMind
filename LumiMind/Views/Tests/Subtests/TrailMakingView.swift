@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - TrailMakingView
 //
@@ -42,6 +43,10 @@ struct TrailMakingView: View {
     @State private var nodePositions: [CGPoint] = []
     @State private var nextExpectedIndex: Int = 0
     @State private var wrongTapNodeID: Int?
+    @State private var bounceNodeID: Int?
+    @State private var pathProgress: CGFloat = 0
+    @State private var pulseActive: Bool = false
+    @State private var isFinishing = false
     @State private var startedAt = Date()
     @State private var timeRemaining: Int
     private let timeLimit: Int
@@ -58,15 +63,14 @@ struct TrailMakingView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                // Completed path
-                Path { path in
-                    guard nextExpectedIndex > 0, nodePositions.count > 1 else { return }
-                    path.move(to: nodePositions[0])
-                    for i in 1..<nextExpectedIndex {
-                        path.addLine(to: nodePositions[i])
-                    }
+                if nodePositions.count > 1 {
+                    TrailPathShape(points: nodePositions, progress: pathProgress)
+                        .stroke(
+                            DesignSystem.attentionGradient,
+                            style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round)
+                        )
+                        .shadow(color: Color(hex: "#00C2A8").opacity(0.25), radius: 3)
                 }
-                .stroke(DesignSystem.backgroundOnboarding.opacity(0.4), lineWidth: 2)
 
                 ForEach(Array(labels.enumerated()), id: \.offset) { index, label in
                     if index < nodePositions.count {
@@ -80,48 +84,117 @@ struct TrailMakingView: View {
                 if nodePositions.isEmpty {
                     nodePositions = Self.generatePositions(count: mode.nodeCount, in: geo.size, seed: mode == .a ? 1 : 2)
                 }
+                pulseActive = true
                 startTimer()
             }
         }
         .padding(.horizontal, DesignSystem.Spacing.md)
         .padding(.top, DesignSystem.Spacing.sm)
         .overlay(alignment: .top) {
-            Text("\(timeRemaining)s")
-                .font(DesignSystem.caption)
-                .foregroundColor(DesignSystem.backgroundOnboarding.opacity(0.6))
+            timerRing
                 .padding(.top, DesignSystem.Spacing.xxs)
         }
     }
 
+    private var timerRing: some View {
+        let fraction = timeLimit > 0 ? CGFloat(timeRemaining) / CGFloat(timeLimit) : 0
+        let isUrgent = timeRemaining <= 10
+
+        return ZStack {
+            Circle()
+                .stroke(DesignSystem.backgroundOnboarding.opacity(0.1), lineWidth: 4)
+            Circle()
+                .trim(from: 0, to: max(0, fraction))
+                .stroke(
+                    isUrgent ? AnyShapeStyle(Color.red) : AnyShapeStyle(DesignSystem.attentionGradient),
+                    style: StrokeStyle(lineWidth: 4, lineCap: .round)
+                )
+                .rotationEffect(.degrees(-90))
+                .animation(.linear(duration: 1), value: timeRemaining)
+            Text("\(timeRemaining)")
+                .font(DesignSystem.caption)
+                .foregroundColor(DesignSystem.backgroundOnboarding.opacity(0.7))
+        }
+        .frame(width: 44, height: 44)
+    }
+
     private func nodeView(index: Int, label: String) -> some View {
         let isCompleted = index < nextExpectedIndex
+        let isNext = index == nextExpectedIndex
         let isWrong = wrongTapNodeID == index
+        let isBouncing = bounceNodeID == index
 
-        return Text(label)
-            .font(DesignSystem.headline)
-            .foregroundColor(isCompleted ? .white : DesignSystem.backgroundOnboarding)
-            .frame(width: 40, height: 40)
-            .background(isCompleted ? AnyShapeStyle(mode == .a ? DesignSystem.attentionGradient : DesignSystem.attentionGradient) : AnyShapeStyle(Color.white))
-            .overlay(
-                Circle().stroke(isWrong ? Color.red : DesignSystem.backgroundOnboarding.opacity(0.15), lineWidth: isWrong ? 2 : 1)
-            )
-            .clipShape(Circle())
-            .shadow(color: .black.opacity(0.05), radius: 2, y: 1)
-            .onTapGesture { handleTap(on: index) }
+        return ZStack {
+            if isNext {
+                Circle()
+                    .stroke(DesignSystem.attentionGradient, lineWidth: 2)
+                    .frame(width: 40, height: 40)
+                    .scaleEffect(pulseActive ? 1.5 : 1.0)
+                    .opacity(pulseActive ? 0 : 0.7)
+                    .animation(
+                        .easeOut(duration: 1.1).repeatForever(autoreverses: false),
+                        value: pulseActive
+                    )
+            }
+
+            Text(label)
+                .font(DesignSystem.headline)
+                .foregroundColor(isCompleted ? .white : DesignSystem.backgroundOnboarding)
+                .frame(width: 40, height: 40)
+                .background(
+                    isCompleted ? AnyShapeStyle(DesignSystem.attentionGradient) : AnyShapeStyle(Color.white)
+                )
+                .overlay(
+                    Circle().stroke(
+                        isWrong ? Color.red : DesignSystem.backgroundOnboarding.opacity(0.15),
+                        lineWidth: isWrong ? 2.5 : 1
+                    )
+                )
+                .clipShape(Circle())
+                .shadow(
+                    color: isCompleted ? DesignSystem.backgroundOnboarding.opacity(0.15) : .black.opacity(0.05),
+                    radius: isCompleted ? 4 : 2,
+                    y: 1
+                )
+                .scaleEffect(isBouncing ? 1.25 : 1.0)
+                .modifier(ShakeEffect(animatableData: isWrong ? 1 : 0))
+        }
+        .onTapGesture { handleTap(on: index) }
     }
 
     private func handleTap(on index: Int) {
+        guard !isFinishing else { return }
+
         guard index == nextExpectedIndex else {
-            wrongTapNodeID = index
+            UINotificationFeedbackGenerator().notificationOccurred(.error)
+            withAnimation(.linear(duration: 0.35)) {
+                wrongTapNodeID = index
+            }
             Task {
-                try? await Task.sleep(nanoseconds: 300_000_000)
-                wrongTapNodeID = nil
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                withAnimation { wrongTapNodeID = nil }
             }
             return
         }
-        nextExpectedIndex += 1
+
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        bounceNodeID = index
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
+            nextExpectedIndex += 1
+            pathProgress = CGFloat(max(0, nextExpectedIndex - 1))
+        }
+        Task {
+            try? await Task.sleep(nanoseconds: 220_000_000)
+            bounceNodeID = nil
+        }
+
         if nextExpectedIndex == labels.count {
-            finish()
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            isFinishing = true
+            Task {
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                finish()
+            }
         }
     }
 
@@ -153,6 +226,60 @@ struct TrailMakingView: View {
             points.append(CGPoint(x: x, y: y))
         }
         return points
+    }
+}
+
+// MARK: - TrailPathShape
+//
+// Animatable path that progressively reveals the connecting line as
+// `progress` increases (integer part = fully-drawn segments, fractional
+// part = partial next segment), so the trail visibly "draws itself" on
+// each correct tap rather than snapping in.
+private struct TrailPathShape: Shape {
+    var points: [CGPoint]
+    var progress: CGFloat
+
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        guard points.count > 1, progress > 0 else { return path }
+
+        path.move(to: points[0])
+        let fullSegments = min(Int(progress), points.count - 1)
+        if fullSegments >= 1 {
+            for i in 1...fullSegments {
+                path.addLine(to: points[i])
+            }
+        }
+
+        let remainder = progress - CGFloat(fullSegments)
+        if remainder > 0, fullSegments < points.count - 1 {
+            let start = points[fullSegments]
+            let end = points[fullSegments + 1]
+            let x = start.x + (end.x - start.x) * remainder
+            let y = start.y + (end.y - start.y) * remainder
+            path.addLine(to: CGPoint(x: x, y: y))
+        }
+
+        return path
+    }
+}
+
+// MARK: - ShakeEffect
+//
+// Horizontal oscillation used to signal a wrong tap on a node.
+private struct ShakeEffect: GeometryEffect {
+    var travelDistance: CGFloat = 6
+    var shakesPerUnit: CGFloat = 3
+    var animatableData: CGFloat
+
+    func effectValue(size: CGSize) -> ProjectionTransform {
+        let translation = travelDistance * sin(animatableData * .pi * shakesPerUnit)
+        return ProjectionTransform(CGAffineTransform(translationX: translation, y: 0))
     }
 }
 

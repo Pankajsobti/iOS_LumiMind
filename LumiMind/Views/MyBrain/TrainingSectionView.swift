@@ -211,15 +211,24 @@ struct TrainingSectionView: View {
         let category = catalogGame?.category ?? GameCategory(rawValue: result.category)
         let gradient = category?.gradient ?? DesignSystem.primaryGradient
 
-        return HStack(spacing: DesignSystem.Spacing.md) {
-            ZStack {
-                Circle()
-                    .fill(gradient)
-                    .frame(width: 40, height: 40)
-                Image(systemName: catalogGame?.iconName ?? "gamecontroller.fill")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(.white)
-            }
+       return HStack(spacing: DesignSystem.Spacing.md) {
+    Group {
+        if let customImageName = catalogGame?.customImageName {
+            Image(customImageName)
+                .resizable()
+                .scaledToFill()
+        } else {
+            Circle()
+                .fill(gradient)
+                .overlay(
+                    Image(systemName: catalogGame?.iconName ?? "gamecontroller.fill")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.white)
+                )
+        }
+    }
+    .frame(width: 40, height: 40)
+    .clipShape(Circle())
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(result.gameName)

@@ -26,6 +26,20 @@ enum DiscoverCategory: String, CaseIterable, Identifiable, Codable, Hashable {
     }
 }
 
+
+
+    var icon: String {
+        switch self {
+        case .memory:         return "brain.head.profile"
+        case .brainHealth:    return "figure.mind.and.body"
+        case .attention:      return "eye.fill"
+        case .mythsFacts:     return "questionmark.circle.fill"
+        case .research:       return "doc.text.magnifyingglass"
+        case .brainBasics:    return "lightbulb.fill"
+        case .inRealLife:     return "figure.walk"
+        case .insideLumiMind: return "sparkles"
+        }
+    }
 struct DiscoverArticle: Identifiable, Hashable {
     let id: String
     let category: DiscoverCategory

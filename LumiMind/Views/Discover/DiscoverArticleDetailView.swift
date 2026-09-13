@@ -48,9 +48,17 @@ struct DiscoverArticleDetailView: View {
         .navigationBarBackButtonHidden(true)
     }
 
-    private var header: some View {
+        private var header: some View {
         ZStack(alignment: .topLeading) {
             article.category.gradient
+
+            Image(systemName: article.category.icon)
+                .font(.system(size: 170, weight: .bold))
+                .foregroundColor(.white.opacity(0.14))
+                .rotationEffect(.degrees(-12))
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                .padding(.trailing, -20)
+
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
                 Button(action: { dismiss() }) {
                     Image(systemName: "chevron.left")

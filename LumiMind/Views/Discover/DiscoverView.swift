@@ -109,6 +109,7 @@ struct DiscoverCardView: View {
         case regular, large
         var width: CGFloat { self == .large ? 220 : 160 }
         var height: CGFloat { self == .large ? 260 : 220 }
+        var watermarkSize: CGFloat { self == .large ? 130 : 95 }
     }
 
     let article: DiscoverArticle
@@ -117,15 +118,30 @@ struct DiscoverCardView: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             article.category.gradient
+
+            Image(systemName: article.category.icon)
+                .font(.system(size: size.watermarkSize, weight: .bold))
+                .foregroundColor(.white.opacity(0.14))
+                .rotationEffect(.degrees(-12))
+                .offset(x: size.width * 0.28, y: size.height * 0.22)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-                Text(article.category.rawValue.uppercased())
-                    .font(DesignSystem.caption.weight(.semibold))
-                    .foregroundColor(.white.opacity(0.85))
-                    .padding(.horizontal, DesignSystem.Spacing.xs)
-                    .padding(.vertical, 4)
-                    .background(Color.white.opacity(0.2))
-                    .clipShape(Capsule())
+                Label {
+                    Text(article.category.rawValue.uppercased())
+                        .font(DesignSystem.caption.weight(.semibold))
+                } icon: {
+                    Image(systemName: article.category.icon)
+                        .font(.system(size: 10, weight: .semibold))
+                }
+                .foregroundColor(.white.opacity(0.9))
+                .padding(.horizontal, DesignSystem.Spacing.xs)
+                .padding(.vertical, 4)
+                .background(Color.white.opacity(0.2))
+                .clipShape(Capsule())
+
                 Spacer()
+
                 Text(article.title)
                     .font(DesignSystem.headline)
                     .foregroundColor(.white)

@@ -131,6 +131,25 @@ enum DesignSystem {
         endPoint: .bottomTrailing
     )
 
+    // MARK: - Memory Span Halloween Theme
+    //
+    // ADDED — not part of the original locked set. Memory Span's
+    // Halloween reskin needs a night-sky + pumpkin palette that doesn't
+    // map to any existing token (memoryGradient is plum/berry, not
+    // orange/night). Scoped to that one screen only — nothing else in
+    // the app should reference these.
+
+    /// Twilight night wash — near-black plum. Used for sky overlay,
+    /// bat silhouettes, and the pumpkin's carved features.
+    static let memorySpanNight = Color(hex: "#2B1B2E")
+
+    /// Jack-o'-lantern glow — pumpkin orange to warm amber.
+    static let memorySpanPumpkinGradient = LinearGradient(
+        colors: [Color(hex: "#E0710E"), Color(hex: "#F49C44")],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+
     // MARK: - Typography
     //
     // Rounded sans-serif throughout the app (SF Rounded via the

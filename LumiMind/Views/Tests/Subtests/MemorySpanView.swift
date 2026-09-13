@@ -64,7 +64,7 @@ struct MemorySpanView: View {
 
     private var driftForward: Bool { direction == .forward }
 
-    private enum LanternFaceContent {
+    fileprivate enum LanternFaceContent {
         case digit(String, id: Int)
         case tapPrompt
         case blank
@@ -495,7 +495,7 @@ private struct ProgressBat: View {
 private struct JackOLanternView: View {
     let glow: Double
     let grinAmount: CGFloat
-    let content: MemorySpanView.LanternFaceContentPublic
+    let content: MemorySpanView.LanternFaceContent
 
     var body: some View {
         ZStack {

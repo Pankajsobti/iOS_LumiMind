@@ -22,6 +22,10 @@ struct TestSessionView: View {
         viewModel.currentSubtest == .forwardMemorySpan || viewModel.currentSubtest == .reverseMemorySpan
     }
 
+    private var isDigitSymbolSubtest: Bool {
+        viewModel.currentSubtest == .digitSymbolCoding
+    }
+
     var body: some View {
         ZStack {
             if isMemorySpanSubtest {
@@ -29,6 +33,8 @@ struct TestSessionView: View {
                     .resizable()
                     .scaledToFill()
                     .ignoresSafeArea()
+            } else if isDigitSymbolSubtest {
+                DesignSystem.backgroundOnboarding.ignoresSafeArea()
             } else {
                 DesignSystem.backgroundMain.ignoresSafeArea()
             }
@@ -38,7 +44,8 @@ struct TestSessionView: View {
                     TestProgressHeaderView(
                         currentIndex: viewModel.currentIndex,
                         total: viewModel.totalSubtests,
-                        progress: viewModel.progress
+                        progress: viewModel.progress,
+                        isDark: isDigitSymbolSubtest
                     )
                 }
 

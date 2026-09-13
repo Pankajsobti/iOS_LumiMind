@@ -4,20 +4,21 @@ struct TestProgressHeaderView: View {
     let currentIndex: Int
     let total: Int
     let progress: Double
+    var isDark: Bool = false
 
     var body: some View {
         VStack(spacing: DesignSystem.Spacing.xxs) {
             HStack {
                 Text("Subtest \(currentIndex + 1) of \(total)")
                     .font(DesignSystem.caption)
-                    .foregroundColor(DesignSystem.backgroundOnboarding.opacity(0.6))
+                    .foregroundColor(isDark ? .white.opacity(0.75) : DesignSystem.backgroundOnboarding.opacity(0.6))
                 Spacer()
             }
 
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(DesignSystem.backgroundOnboarding.opacity(0.08))
+                        .fill(isDark ? Color.white.opacity(0.15) : DesignSystem.backgroundOnboarding.opacity(0.08))
                     Capsule()
                         .fill(DesignSystem.primaryGradient)
                         .frame(width: geo.size.width * progress)

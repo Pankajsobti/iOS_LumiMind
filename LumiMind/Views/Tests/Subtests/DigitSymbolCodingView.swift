@@ -118,7 +118,7 @@ struct DigitSymbolCodingView: View {
             CipherConstellation()
                 .opacity(0.35)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea()
     }
 
     // MARK: - Study phase (initial + refresher)

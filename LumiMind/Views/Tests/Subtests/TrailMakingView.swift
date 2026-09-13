@@ -72,7 +72,7 @@ struct TrailMakingView: View {
                             DesignSystem.attentionGradient,
                             style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round)
                         )
-                        .shadow(color: Color(hex: "#00C2A8").opacity(0.25), radius: 3)
+                        .shadow(color: Color(hex: "#00C2A8").opacity(0.3), radius: 4)
                 }
 
                 ForEach(Array(labels.enumerated()), id: \.offset) { index, label in
@@ -83,6 +83,7 @@ struct TrailMakingView: View {
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
+            .clipped()
             .onAppear {
                 if nodePositions.isEmpty {
                     nodePositions = Self.generatePositions(count: mode.nodeCount, in: geo.size)
@@ -105,21 +106,37 @@ struct TrailMakingView: View {
         ZStack {
             DesignSystem.backgroundMain
 
+            // Large, clearly-visible mesh blobs — teal (attention) + lavender (primary).
             Circle()
                 .fill(DesignSystem.attentionGradient)
-                .frame(width: 260, height: 260)
-                .blur(radius: 80)
-                .opacity(0.16)
-                .offset(x: -130, y: -220)
+                .frame(width: 340, height: 340)
+                .blur(radius: 55)
+                .opacity(0.4)
+                .offset(x: -110, y: -260)
 
             Circle()
                 .fill(DesignSystem.primaryGradient)
-                .frame(width: 220, height: 220)
-                .blur(radius: 70)
-                .opacity(0.12)
-                .offset(x: 130, y: 240)
+                .frame(width: 300, height: 300)
+                .blur(radius: 55)
+                .opacity(0.32)
+                .offset(x: 140, y: 120)
 
-            DotGridBackground(color: DesignSystem.backgroundOnboarding.opacity(0.05))
+            Circle()
+                .fill(DesignSystem.attentionGradient)
+                .frame(width: 260, height: 260)
+                .blur(radius: 60)
+                .opacity(0.28)
+                .offset(x: -100, y: 340)
+
+            HexGridBackground(color: DesignSystem.backgroundOnboarding.opacity(0.06))
+
+            // Soft overall tint so the blobs and grid feel unified rather than
+            // like separate elements floating on cream.
+            LinearGradient(
+                colors: [Color.white.opacity(0.5), Color.clear, Color.white.opacity(0.35)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
         }
         .ignoresSafeArea()
     }
@@ -146,6 +163,7 @@ struct TrailMakingView: View {
                 .foregroundColor(DesignSystem.backgroundOnboarding.opacity(0.7))
         }
         .frame(width: 44, height: 44)
+        .background(Circle().fill(Color.white.opacity(0.6)))
     }
 
     // MARK: - Node
@@ -155,48 +173,49 @@ struct TrailMakingView: View {
         let isNext = index == nextExpectedIndex
         let isWrong = wrongTapNodeID == index
         let isBouncing = bounceNodeID == index
+        let hexSize: CGFloat = 44
 
         return ZStack {
             if isNext {
-                Circle()
+                HexagonShape()
                     .stroke(DesignSystem.attentionGradient, lineWidth: 2)
-                    .frame(width: 40, height: 40)
-                    .scaleEffect(pulseActive ? 1.5 : 1.0)
-                    .opacity(pulseActive ? 0 : 0.7)
+                    .frame(width: hexSize, height: hexSize)
+                    .scaleEffect(pulseActive ? 1.55 : 1.0)
+                    .opacity(pulseActive ? 0 : 0.75)
                     .animation(
                         .easeOut(duration: 1.1).repeatForever(autoreverses: false),
                         value: pulseActive
                     )
             }
 
-            Circle()
+            HexagonShape()
                 .fill(
                     isCompleted
                         ? AnyShapeStyle(DesignSystem.attentionGradient)
                         : AnyShapeStyle(
-                            RadialGradient(
-                                colors: [Color.white, Color(hex: "#DCEFEA")],
-                                center: .topLeading,
-                                startRadius: 2,
-                                endRadius: 34
+                            LinearGradient(
+                                colors: [Color.white, Color(hex: "#D6EFEA")],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
                             )
                           )
                 )
-                .frame(width: 40, height: 40)
+                .frame(width: hexSize, height: hexSize)
                 .overlay(
-                    // Glass highlight
-                    Circle()
-                        .trim(from: 0.5, to: 0.97)
-                        .stroke(Color.white.opacity(isCompleted ? 0.5 : 0.9), lineWidth: 3)
-                        .rotationEffect(.degrees(-45))
-                        .blur(radius: 0.5)
-                        .padding(3)
+                    // Glossy top-left highlight, like light hitting a gem facet.
+                    HexagonShape()
+                        .trim(from: 0.62, to: 0.95)
+                        .stroke(Color.white.opacity(isCompleted ? 0.55 : 0.85), lineWidth: 3)
+                        .blur(radius: 0.4)
+                        .frame(width: hexSize, height: hexSize)
                 )
                 .overlay(
-                    Circle().stroke(
-                        isWrong ? Color.red : DesignSystem.backgroundOnboarding.opacity(0.12),
-                        lineWidth: isWrong ? 2.5 : 1
-                    )
+                    HexagonShape()
+                        .stroke(
+                            isWrong ? Color.red : DesignSystem.backgroundOnboarding.opacity(0.15),
+                            lineWidth: isWrong ? 2.5 : 1.2
+                        )
+                        .frame(width: hexSize, height: hexSize)
                 )
                 .overlay(
                     Text(label)
@@ -204,13 +223,15 @@ struct TrailMakingView: View {
                         .foregroundColor(isCompleted ? .white : DesignSystem.backgroundOnboarding)
                 )
                 .shadow(
-                    color: isCompleted ? Color(hex: "#00C2A8").opacity(0.4) : Color(hex: "#00C2A8").opacity(0.15),
-                    radius: isCompleted ? 6 : 3,
+                    color: isCompleted ? Color(hex: "#00C2A8").opacity(0.5) : Color(hex: "#00C2A8").opacity(0.18),
+                    radius: isCompleted ? 7 : 3,
                     y: 2
                 )
-                .scaleEffect(isBouncing ? 1.25 : 1.0)
+                .scaleEffect(isBouncing ? 1.28 : 1.0)
                 .modifier(ShakeEffect(animatableData: isWrong ? 1 : 0))
         }
+        .frame(width: 52, height: 52)
+        .contentShape(Rectangle())
         .onTapGesture { handleTap(on: index) }
     }
 
@@ -274,8 +295,8 @@ struct TrailMakingView: View {
     /// together or overlapping.
     private static func generatePositions(count: Int, in size: CGSize) -> [CGPoint] {
         var points: [CGPoint] = []
-        let margin: CGFloat = 30
-        let minDistance: CGFloat = 62
+        let margin: CGFloat = 32
+        let minDistance: CGFloat = 64
         let maxAttemptsPerPoint = 200
 
         let usableWidth = max(margin + 1, size.width - margin)
@@ -301,8 +322,6 @@ struct TrailMakingView: View {
                 attempt += 1
             }
             if !placed {
-                // Fallback: accept a random point anyway rather than
-                // looping forever if the canvas is too small/crowded.
                 points.append(CGPoint(
                     x: CGFloat.random(in: margin...usableWidth),
                     y: CGFloat.random(in: margin...usableHeight)
@@ -353,28 +372,105 @@ private struct TrailPathShape: Shape {
     }
 }
 
-// MARK: - DotGridBackground
+// MARK: - HexagonShape
 //
-// Faint dot-grid texture drawn once per frame via Canvas, used to give
-// the subtest background subtle depth instead of a flat fill.
-private struct DotGridBackground: View {
-    var spacing: CGFloat = 26
-    var dotSize: CGFloat = 2
+// Rounded flat-top hexagon used for every trail node — a small but
+// deliberate departure from plain circles so nodes read as distinct
+// "gem" tap targets rather than generic dots.
+private struct HexagonShape: Shape {
+    var cornerRadius: CGFloat = 6
+
+    func path(in rect: CGRect) -> Path {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let radius = min(rect.width, rect.height) / 2
+
+        var vertices: [CGPoint] = []
+        for i in 0..<6 {
+            let angle = Angle(degrees: Double(i) * 60 - 90).radians
+            vertices.append(CGPoint(
+                x: center.x + radius * CGFloat(cos(angle)),
+                y: center.y + radius * CGFloat(sin(angle))
+            ))
+        }
+
+        var path = Path()
+        let count = vertices.count
+        for i in 0..<count {
+            let current = vertices[i]
+            let previous = vertices[(i - 1 + count) % count]
+            let next = vertices[(i + 1) % count]
+
+            let toPrev = normalized(dx: previous.x - current.x, dy: previous.y - current.y)
+            let toNext = normalized(dx: next.x - current.x, dy: next.y - current.y)
+
+            let startPoint = CGPoint(x: current.x + toPrev.dx * cornerRadius, y: current.y + toPrev.dy * cornerRadius)
+            let endPoint = CGPoint(x: current.x + toNext.dx * cornerRadius, y: current.y + toNext.dy * cornerRadius)
+
+            if i == 0 {
+                path.move(to: startPoint)
+            } else {
+                path.addLine(to: startPoint)
+            }
+            path.addQuadCurve(to: endPoint, control: current)
+        }
+        path.closeSubpath()
+        return path
+    }
+
+    private func normalized(dx: CGFloat, dy: CGFloat) -> (dx: CGFloat, dy: CGFloat) {
+        let length = max(0.0001, sqrt(dx * dx + dy * dy))
+        return (dx / length, dy / length)
+    }
+}
+
+// MARK: - HexGridBackground
+//
+// Faint tessellated hex-grid texture drawn via Canvas, echoing the
+// hexagonal node shape so the background and nodes feel like one
+// cohesive visual language rather than unrelated decoration.
+private struct HexGridBackground: View {
+    var hexRadius: CGFloat = 22
     var color: Color
 
     var body: some View {
         Canvas { context, size in
-            var x: CGFloat = spacing / 2
-            while x < size.width {
-                var y: CGFloat = spacing / 2
-                while y < size.height {
-                    let rect = CGRect(x: x - dotSize / 2, y: y - dotSize / 2, width: dotSize, height: dotSize)
-                    context.fill(Path(ellipseIn: rect), with: .color(color))
-                    y += spacing
+            let width = hexRadius * 2
+            let height = sqrt(3) * hexRadius
+            let horizontalSpacing = width * 0.75
+            let verticalSpacing = height
+
+            var col = 0
+            var x: CGFloat = 0
+            while x < size.width + width {
+                let yOffset: CGFloat = col % 2 == 0 ? 0 : verticalSpacing / 2
+                var y: CGFloat = -verticalSpacing + yOffset
+                while y < size.height + height {
+                    let hexPath = flatTopHexagon(center: CGPoint(x: x, y: y), radius: hexRadius)
+                    context.stroke(hexPath, with: .color(color), lineWidth: 1)
+                    y += verticalSpacing
                 }
-                x += spacing
+                x += horizontalSpacing
+                col += 1
             }
         }
+    }
+
+    private func flatTopHexagon(center: CGPoint, radius: CGFloat) -> Path {
+        var path = Path()
+        for i in 0..<6 {
+            let angle = Angle(degrees: Double(i) * 60).radians
+            let point = CGPoint(
+                x: center.x + radius * CGFloat(cos(angle)),
+                y: center.y + radius * CGFloat(sin(angle))
+            )
+            if i == 0 {
+                path.move(to: point)
+            } else {
+                path.addLine(to: point)
+            }
+        }
+        path.closeSubpath()
+        return path
     }
 }
 

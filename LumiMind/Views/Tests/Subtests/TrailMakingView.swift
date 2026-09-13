@@ -4,9 +4,13 @@ import UIKit
 // MARK: - TrailMakingView
 //
 // Connect-the-dots subtest. Mode A: tap 1→2→3… in order. Mode B:
-// alternates number/letter (1→A→2→B…). Node layout is randomized
-// fresh each time the view appears (see generatePositions) so the
-// pattern is never the same twice.
+// alternates number/letter (1→A→2→B…). Node layout AND node shape are
+// both randomized fresh each time the view appears, so no two
+// playthroughs look the same. Each node's outer tap-target stays a
+// consistent circular medallion (same size/hit-box for every node,
+// important for a timed test); the random SF Symbol glyph inside it
+// is what gives each node a distinct visual identity, with the
+// number/letter shown in a small always-legible corner badge.
 
 struct TrailMakingView: View {
     enum Mode {
@@ -42,6 +46,7 @@ struct TrailMakingView: View {
     let onComplete: (Int, Int, Int) -> Void
 
     @State private var nodePositions: [CGPoint] = []
+    @State private var nodeShapes: [String] = []
     @State private var nextExpectedIndex: Int = 0
     @State private var wrongTapNodeID: Int?
     @State private var bounceNodeID: Int?
@@ -61,6 +66,33 @@ struct TrailMakingView: View {
 
     private var labels: [String] { mode.labels }
 
+    // MARK: - Shape pool
+    //
+    // 50 SF Symbols across 6 categories, so every playthrough hands
+    // out genuinely varied shapes rather than one repeated form.
+    // If any name doesn't render on your SF Symbols version, swap
+    // that single string — nothing else depends on the list order.
+    private static let shapePool: [String] = [
+        // Animals (10)
+        "tortoise.fill", "hare.fill", "fish.fill", "ladybug.fill", "ant.fill",
+        "bird.fill", "cat.fill", "dog.fill", "lizard.fill", "pawprint.fill",
+        // Space (8)
+        "moon.fill", "moon.stars.fill", "sun.max.fill", "sparkles", "star.fill",
+        "globe", "atom", "moon.circle.fill",
+        // Nature (8)
+        "leaf.fill", "flame.fill", "drop.fill", "snowflake", "cloud.fill",
+        "wind", "mountain.2.fill", "rainbow",
+        // Weather (6)
+        "bolt.fill", "tornado", "cloud.bolt.fill", "cloud.snow.fill",
+        "cloud.rain.fill", "sun.haze.fill",
+        // Geometric (10)
+        "hexagon.fill", "seal.fill", "diamond.fill", "triangle.fill", "square.fill",
+        "circle.fill", "octagon.fill", "shield.fill", "rhombus", "capsule",
+        // Objects (8)
+        "heart.fill", "gift.fill", "crown.fill", "bell.fill",
+        "gamecontroller.fill", "airplane", "car.fill", "anchor"
+    ]
+
     var body: some View {
         GeometryReader { geo in
             ZStack {
@@ -76,8 +108,8 @@ struct TrailMakingView: View {
                 }
 
                 ForEach(Array(labels.enumerated()), id: \.offset) { index, label in
-                    if index < nodePositions.count {
-                        nodeView(index: index, label: label)
+                    if index < nodePositions.count, index < nodeShapes.count {
+                        nodeView(index: index, label: label, shapeName: nodeShapes[index])
                             .position(nodePositions[index])
                     }
                 }
@@ -87,6 +119,9 @@ struct TrailMakingView: View {
             .onAppear {
                 if nodePositions.isEmpty {
                     nodePositions = Self.generatePositions(count: mode.nodeCount, in: geo.size)
+                }
+                if nodeShapes.isEmpty {
+                    nodeShapes = Self.assignShapes(count: mode.nodeCount)
                 }
                 pulseActive = true
                 startTimer()
@@ -106,7 +141,6 @@ struct TrailMakingView: View {
         ZStack {
             DesignSystem.backgroundMain
 
-            // Large, clearly-visible mesh blobs — teal (attention) + lavender (primary).
             Circle()
                 .fill(DesignSystem.attentionGradient)
                 .frame(width: 340, height: 340)
@@ -128,10 +162,8 @@ struct TrailMakingView: View {
                 .opacity(0.28)
                 .offset(x: -100, y: 340)
 
-            HexGridBackground(color: DesignSystem.backgroundOnboarding.opacity(0.06))
+            DotGridBackground(color: DesignSystem.backgroundOnboarding.opacity(0.06))
 
-            // Soft overall tint so the blobs and grid feel unified rather than
-            // like separate elements floating on cream.
             LinearGradient(
                 colors: [Color.white.opacity(0.5), Color.clear, Color.white.opacity(0.35)],
                 startPoint: .top,
@@ -168,18 +200,18 @@ struct TrailMakingView: View {
 
     // MARK: - Node
 
-    private func nodeView(index: Int, label: String) -> some View {
+    private func nodeView(index: Int, label: String, shapeName: String) -> some View {
         let isCompleted = index < nextExpectedIndex
         let isNext = index == nextExpectedIndex
         let isWrong = wrongTapNodeID == index
         let isBouncing = bounceNodeID == index
-        let hexSize: CGFloat = 44
+        let medallionSize: CGFloat = 46
 
         return ZStack {
             if isNext {
-                HexagonShape()
+                Circle()
                     .stroke(DesignSystem.attentionGradient, lineWidth: 2)
-                    .frame(width: hexSize, height: hexSize)
+                    .frame(width: medallionSize, height: medallionSize)
                     .scaleEffect(pulseActive ? 1.55 : 1.0)
                     .opacity(pulseActive ? 0 : 0.75)
                     .animation(
@@ -188,49 +220,68 @@ struct TrailMakingView: View {
                     )
             }
 
-            HexagonShape()
-                .fill(
-                    isCompleted
-                        ? AnyShapeStyle(DesignSystem.attentionGradient)
-                        : AnyShapeStyle(
-                            LinearGradient(
-                                colors: [Color.white, Color(hex: "#D6EFEA")],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                          )
-                )
-                .frame(width: hexSize, height: hexSize)
-                .overlay(
-                    // Glossy top-left highlight, like light hitting a gem facet.
-                    HexagonShape()
-                        .trim(from: 0.62, to: 0.95)
-                        .stroke(Color.white.opacity(isCompleted ? 0.55 : 0.85), lineWidth: 3)
-                        .blur(radius: 0.4)
-                        .frame(width: hexSize, height: hexSize)
-                )
-                .overlay(
-                    HexagonShape()
-                        .stroke(
+            ZStack {
+                // Consistent circular medallion — same size/shape for
+                // every node, so tap targets stay fair across the
+                // whole board regardless of which glyph is inside.
+                Circle()
+                    .fill(
+                        isCompleted
+                            ? AnyShapeStyle(DesignSystem.attentionGradient)
+                            : AnyShapeStyle(
+                                LinearGradient(
+                                    colors: [Color.white, Color(hex: "#EAF6F3")],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                              )
+                    )
+                    .frame(width: medallionSize, height: medallionSize)
+                    .overlay(
+                        Circle()
+                            .trim(from: 0.55, to: 0.92)
+                            .stroke(Color.white.opacity(isCompleted ? 0.5 : 0.85), lineWidth: 3)
+                            .rotationEffect(.degrees(-40))
+                            .blur(radius: 0.4)
+                    )
+                    .overlay(
+                        Circle().stroke(
                             isWrong ? Color.red : DesignSystem.backgroundOnboarding.opacity(0.15),
-                            lineWidth: isWrong ? 2.5 : 1.2
+                            lineWidth: isWrong ? 2.5 : 1
                         )
-                        .frame(width: hexSize, height: hexSize)
-                )
-                .overlay(
-                    Text(label)
-                        .font(DesignSystem.headline)
-                        .foregroundColor(isCompleted ? .white : DesignSystem.backgroundOnboarding)
-                )
-                .shadow(
-                    color: isCompleted ? Color(hex: "#00C2A8").opacity(0.5) : Color(hex: "#00C2A8").opacity(0.18),
-                    radius: isCompleted ? 7 : 3,
-                    y: 2
-                )
-                .scaleEffect(isBouncing ? 1.28 : 1.0)
-                .modifier(ShakeEffect(animatableData: isWrong ? 1 : 0))
+                    )
+                    .shadow(
+                        color: isCompleted ? Color(hex: "#00C2A8").opacity(0.5) : Color(hex: "#00C2A8").opacity(0.16),
+                        radius: isCompleted ? 7 : 3,
+                        y: 2
+                    )
+
+                // The random shape — this is what varies node to node.
+                Image(systemName: shapeName)
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(
+                        isCompleted
+                            ? AnyShapeStyle(Color.white)
+                            : AnyShapeStyle(DesignSystem.attentionGradient)
+                    )
+
+                // Number/letter badge — separated from the glyph so
+                // it's always legible no matter which shape or color
+                // is underneath it.
+                Text(label)
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                    .frame(width: 18, height: 18)
+                    .background(
+                        Circle().fill(isCompleted ? Color.black.opacity(0.35) : DesignSystem.backgroundOnboarding)
+                    )
+                    .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
+                    .offset(x: medallionSize / 2 - 4, y: -(medallionSize / 2 - 4))
+            }
+            .scaleEffect(isBouncing ? 1.28 : 1.0)
+            .modifier(ShakeEffect(animatableData: isWrong ? 1 : 0))
         }
-        .frame(width: 52, height: 52)
+        .frame(width: 56, height: 56)
         .contentShape(Rectangle())
         .onTapGesture { handleTap(on: index) }
     }
@@ -289,14 +340,12 @@ struct TrailMakingView: View {
         onComplete(nextExpectedIndex, labels.count, duration)
     }
 
-    /// Generates a fresh random layout every call — no fixed seed —
-    /// so the pattern differs on every playthrough. Uses simple
-    /// rejection sampling to keep nodes from spawning too close
-    /// together or overlapping.
+    /// Fresh random layout every call — no fixed seed — with simple
+    /// rejection sampling so nodes don't spawn overlapping.
     private static func generatePositions(count: Int, in size: CGSize) -> [CGPoint] {
         var points: [CGPoint] = []
-        let margin: CGFloat = 32
-        let minDistance: CGFloat = 64
+        let margin: CGFloat = 34
+        let minDistance: CGFloat = 66
         let maxAttemptsPerPoint = 200
 
         let usableWidth = max(margin + 1, size.width - margin)
@@ -329,6 +378,14 @@ struct TrailMakingView: View {
             }
         }
         return points
+    }
+
+    /// Shuffles the 50-symbol pool and hands out the first `count` —
+    /// genuinely different shapes every playthrough, no repeats
+    /// within a single round since the pool is far larger than the
+    /// max node count.
+    private static func assignShapes(count: Int) -> [String] {
+        Array(shapePool.shuffled().prefix(count))
     }
 }
 
@@ -372,105 +429,28 @@ private struct TrailPathShape: Shape {
     }
 }
 
-// MARK: - HexagonShape
+// MARK: - DotGridBackground
 //
-// Rounded flat-top hexagon used for every trail node — a small but
-// deliberate departure from plain circles so nodes read as distinct
-// "gem" tap targets rather than generic dots.
-private struct HexagonShape: Shape {
-    var cornerRadius: CGFloat = 6
-
-    func path(in rect: CGRect) -> Path {
-        let center = CGPoint(x: rect.midX, y: rect.midY)
-        let radius = min(rect.width, rect.height) / 2
-
-        var vertices: [CGPoint] = []
-        for i in 0..<6 {
-            let angle = Angle(degrees: Double(i) * 60 - 90).radians
-            vertices.append(CGPoint(
-                x: center.x + radius * CGFloat(cos(angle)),
-                y: center.y + radius * CGFloat(sin(angle))
-            ))
-        }
-
-        var path = Path()
-        let count = vertices.count
-        for i in 0..<count {
-            let current = vertices[i]
-            let previous = vertices[(i - 1 + count) % count]
-            let next = vertices[(i + 1) % count]
-
-            let toPrev = normalized(dx: previous.x - current.x, dy: previous.y - current.y)
-            let toNext = normalized(dx: next.x - current.x, dy: next.y - current.y)
-
-            let startPoint = CGPoint(x: current.x + toPrev.dx * cornerRadius, y: current.y + toPrev.dy * cornerRadius)
-            let endPoint = CGPoint(x: current.x + toNext.dx * cornerRadius, y: current.y + toNext.dy * cornerRadius)
-
-            if i == 0 {
-                path.move(to: startPoint)
-            } else {
-                path.addLine(to: startPoint)
-            }
-            path.addQuadCurve(to: endPoint, control: current)
-        }
-        path.closeSubpath()
-        return path
-    }
-
-    private func normalized(dx: CGFloat, dy: CGFloat) -> (dx: CGFloat, dy: CGFloat) {
-        let length = max(0.0001, sqrt(dx * dx + dy * dy))
-        return (dx / length, dy / length)
-    }
-}
-
-// MARK: - HexGridBackground
-//
-// Faint tessellated hex-grid texture drawn via Canvas, echoing the
-// hexagonal node shape so the background and nodes feel like one
-// cohesive visual language rather than unrelated decoration.
-private struct HexGridBackground: View {
-    var hexRadius: CGFloat = 22
+// Faint dot-grid texture drawn via Canvas, used to give the subtest
+// background subtle depth instead of a flat fill.
+private struct DotGridBackground: View {
+    var spacing: CGFloat = 26
+    var dotSize: CGFloat = 2
     var color: Color
 
     var body: some View {
         Canvas { context, size in
-            let width = hexRadius * 2
-            let height = sqrt(3) * hexRadius
-            let horizontalSpacing = width * 0.75
-            let verticalSpacing = height
-
-            var col = 0
-            var x: CGFloat = 0
-            while x < size.width + width {
-                let yOffset: CGFloat = col % 2 == 0 ? 0 : verticalSpacing / 2
-                var y: CGFloat = -verticalSpacing + yOffset
-                while y < size.height + height {
-                    let hexPath = flatTopHexagon(center: CGPoint(x: x, y: y), radius: hexRadius)
-                    context.stroke(hexPath, with: .color(color), lineWidth: 1)
-                    y += verticalSpacing
+            var x: CGFloat = spacing / 2
+            while x < size.width {
+                var y: CGFloat = spacing / 2
+                while y < size.height {
+                    let rect = CGRect(x: x - dotSize / 2, y: y - dotSize / 2, width: dotSize, height: dotSize)
+                    context.fill(Path(ellipseIn: rect), with: .color(color))
+                    y += spacing
                 }
-                x += horizontalSpacing
-                col += 1
+                x += spacing
             }
         }
-    }
-
-    private func flatTopHexagon(center: CGPoint, radius: CGFloat) -> Path {
-        var path = Path()
-        for i in 0..<6 {
-            let angle = Angle(degrees: Double(i) * 60).radians
-            let point = CGPoint(
-                x: center.x + radius * CGFloat(cos(angle)),
-                y: center.y + radius * CGFloat(sin(angle))
-            )
-            if i == 0 {
-                path.move(to: point)
-            } else {
-                path.addLine(to: point)
-            }
-        }
-        path.closeSubpath()
-        return path
     }
 }
 

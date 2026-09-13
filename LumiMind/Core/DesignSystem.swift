@@ -131,24 +131,24 @@ enum DesignSystem {
         endPoint: .bottomTrailing
     )
 
-    // MARK: - Memory Span Halloween Theme
+    // MARK: - Memory Span Card Palette
     //
-    // ADDED — not part of the original locked set. Memory Span's
-    // Halloween reskin needs a night-sky + pumpkin palette that doesn't
-    // map to any existing token (memoryGradient is plum/berry, not
-    // orange/night). Scoped to that one screen only — nothing else in
-    // the app should reference these.
+    // ADDED — replaces the removed Halloween theme. A cycling set of
+    // 2-color gradients used for the digit "cards" (both the central
+    // sequence-display card and the keypad buttons) in MemorySpanView.
+    // Scoped to that screen only — nothing else should reference these.
 
-    /// Twilight night wash — near-black plum. Used for sky overlay,
-    /// bat silhouettes, and the pumpkin's carved features.
-    static let memorySpanNight = Color(hex: "#2B1B2E")
+    static let memorySpanCardPalette: [LinearGradient] = [
+        LinearGradient(colors: [Color(hex: "#4A7BFF"), Color(hex: "#6FA8FF")], startPoint: .topLeading, endPoint: .bottomTrailing),
+        LinearGradient(colors: [Color(hex: "#9B3F8F"), Color(hex: "#D46BB5")], startPoint: .topLeading, endPoint: .bottomTrailing),
+        LinearGradient(colors: [Color(hex: "#F5A623"), Color(hex: "#FF7A45")], startPoint: .topLeading, endPoint: .bottomTrailing),
+        LinearGradient(colors: [Color(hex: "#2ECC71"), Color(hex: "#58D68D")], startPoint: .topLeading, endPoint: .bottomTrailing),
+        LinearGradient(colors: [Color(hex: "#F857A6"), Color(hex: "#FF7CA3")], startPoint: .topLeading, endPoint: .bottomTrailing),
+    ]
 
-    /// Jack-o'-lantern glow — pumpkin orange to warm amber.
-    static let memorySpanPumpkinGradient = LinearGradient(
-        colors: [Color(hex: "#E0710E"), Color(hex: "#F49C44")],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-    )
+    static func memorySpanCardGradient(forDigit digit: Int) -> LinearGradient {
+        memorySpanCardPalette[digit % memorySpanCardPalette.count]
+    }
 
     // MARK: - Typography
     //

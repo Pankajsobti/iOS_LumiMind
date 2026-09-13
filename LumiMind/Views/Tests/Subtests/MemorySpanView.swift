@@ -74,11 +74,6 @@ struct MemorySpanView: View {
 
     var body: some View {
         ZStack {
-            Image("bg-lake-sunset")
-                .resizable()
-                .scaledToFill()
-                .ignoresSafeArea()
-
             VStack(spacing: DesignSystem.Spacing.md) {
                 progressRow
                     .padding(.top, DesignSystem.Spacing.sm)

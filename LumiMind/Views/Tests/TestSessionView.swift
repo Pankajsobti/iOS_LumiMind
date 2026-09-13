@@ -18,9 +18,20 @@ struct TestSessionView: View {
         self.onSessionFinished = onSessionFinished
     }
 
+    private var isMemorySpanSubtest: Bool {
+        viewModel.currentSubtest == .forwardMemorySpan || viewModel.currentSubtest == .reverseMemorySpan
+    }
+
     var body: some View {
         ZStack {
-            DesignSystem.backgroundMain.ignoresSafeArea()
+            if isMemorySpanSubtest {
+                Image("bg-lake-sunset")
+                    .resizable()
+                    .scaledToFill()
+                    .ignoresSafeArea()
+            } else {
+                DesignSystem.backgroundMain.ignoresSafeArea()
+            }
 
             VStack(spacing: 0) {
                 if viewModel.phase != .instructions {

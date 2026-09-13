@@ -24,7 +24,7 @@ enum DiscoverCategory: String, CaseIterable, Identifiable, Codable, Hashable {
         case .insideLumiMind: return DesignSystem.spotlightGradient
         }
     }
-}
+
 
 
 
@@ -40,6 +40,7 @@ enum DiscoverCategory: String, CaseIterable, Identifiable, Codable, Hashable {
         case .insideLumiMind: return "sparkles"
         }
     }
+}    
 struct DiscoverArticle: Identifiable, Hashable {
     let id: String
     let category: DiscoverCategory

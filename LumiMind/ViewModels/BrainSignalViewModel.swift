@@ -76,7 +76,7 @@ struct SimulatedBrainSignalSource: BrainSignalSource {
 /// A tiny deterministic RNG seeded by session timestamp — same session
 /// always looks the same while you're viewing it, but two different
 /// play sessions never produce identical numbers.
-struct SeededGenerator: RandomNumberGenerator {
+struct BrainSeededGenerator: RandomNumberGenerator {
     private var state: UInt64
     init(seed: UInt64) { state = seed == 0 ? 0xdeadbeef : seed }
     mutating func next() -> UInt64 {
@@ -95,7 +95,7 @@ struct PostGameBrainSignalSource: BrainSignalSource {
     init(category: GameCategory, seed: UInt64) {
         self.category = category
         self.seed = seed
-        var gen = SeededGenerator(seed: seed)
+        var gen = BrainSeededGenerator(seed: seed)
         let bias = Self.parameterBias(category)
         func jitter(_ base: Double) -> Double { max(0.15, min(0.97, base + Double.random(in: -0.09...0.09, using: &gen))) }
         parameters = BrainSignalParameters(
@@ -119,7 +119,7 @@ struct PostGameBrainSignalSource: BrainSignalSource {
     func currentParameters() -> BrainSignalParameters { parameters }
 
     func insight() -> SessionInsight {
-        var gen = SeededGenerator(seed: seed &+ 99)
+        var gen = BrainSeededGenerator(seed: seed &+ 99)
         let dominant = Self.bandDominance(for: category).max(by: { $0.value < $1.value })?.key ?? .beta
         let percent = Int.random(in: 12...31, using: &gen)
         return SessionInsight(dominantBand: dominant, changeDescription: "\(dominant.rawValue) activity rose ~\(percent)% during this session")

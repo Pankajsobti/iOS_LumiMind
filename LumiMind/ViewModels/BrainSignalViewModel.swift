@@ -5,6 +5,7 @@ import SwiftUI
 protocol BrainSignalSource {
     func currentAmplitudes(at time: TimeInterval) -> [BrainWaveBand: Double]
     func currentParameters() -> BrainSignalParameters
+    func currentCategoryScores() -> [GameCategory: Double]
 }
 
 enum BrainWaveBand: String, CaseIterable, Identifiable {
@@ -22,8 +23,6 @@ enum BrainWaveBand: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Mirrors DesignSystem's locked category-gradient hex values
-    /// (LinearGradient doesn't expose its stops back out).
     var strokeColors: [Color] {
         switch self {
         case .delta: return [Color(hex: "#4A7BFF"), Color(hex: "#6FA8FF")]
@@ -68,14 +67,20 @@ struct SimulatedBrainSignalSource: BrainSignalSource {
             signalQuality: clamp(0.88 + .random(in: -0.05...0.08))
         )
     }
+
+    func currentCategoryScores() -> [GameCategory: Double] {
+        var result: [GameCategory: Double] = [:]
+        for category in GameCategory.allCases {
+            result[category] = clamp(0.5 + Double.random(in: -0.12...0.12))
+        }
+        return result
+    }
+
     private func clamp(_ v: Double) -> Double { max(0, min(1, v)) }
 }
 
 // MARK: - Post-game source (the actual demo payload)
 
-/// A tiny deterministic RNG seeded by session timestamp — same session
-/// always looks the same while you're viewing it, but two different
-/// play sessions never produce identical numbers.
 struct BrainSeededGenerator: RandomNumberGenerator {
     private var state: UInt64
     init(seed: UInt64) { state = seed == 0 ? 0xdeadbeef : seed }
@@ -118,6 +123,19 @@ struct PostGameBrainSignalSource: BrainSignalSource {
 
     func currentParameters() -> BrainSignalParameters { parameters }
 
+    /// One score per cognitive category — the just-played game's own
+    /// category scores highest, related categories get realistic
+    /// spillover, and everything re-jitters slightly on every call.
+    func currentCategoryScores() -> [GameCategory: Double] {
+        var result: [GameCategory: Double] = [:]
+        let baseline = Self.categoryBaseline(for: category)
+        for cat in GameCategory.allCases {
+            let base = baseline[cat] ?? 0.5
+            result[cat] = max(0.12, min(0.98, base + Double.random(in: -0.05...0.05)))
+        }
+        return result
+    }
+
     func insight() -> SessionInsight {
         var gen = BrainSeededGenerator(seed: seed &+ 99)
         let dominant = Self.bandDominance(for: category).max(by: { $0.value < $1.value })?.key ?? .beta
@@ -146,6 +164,25 @@ struct PostGameBrainSignalSource: BrainSignalSource {
         case .math:           [.delta: 0.30, .theta: 0.40, .alpha: 0.45, .beta: 0.68, .gamma: 0.58]
         }
     }
+
+    /// Own category scores highest; adjacent skills that plausibly
+    /// share cognitive load get moderate spillover; the rest sit lower.
+    private static func categoryBaseline(for c: GameCategory) -> [GameCategory: Double] {
+        switch c {
+        case .speed:
+            [.speed: 0.88, .memory: 0.55, .attention: 0.70, .flexibility: 0.60, .problemSolving: 0.50, .math: 0.58]
+        case .memory:
+            [.speed: 0.52, .memory: 0.90, .attention: 0.62, .flexibility: 0.48, .problemSolving: 0.58, .math: 0.50]
+        case .attention:
+            [.speed: 0.60, .memory: 0.58, .attention: 0.89, .flexibility: 0.55, .problemSolving: 0.52, .math: 0.48]
+        case .flexibility:
+            [.speed: 0.58, .memory: 0.50, .attention: 0.60, .flexibility: 0.87, .problemSolving: 0.55, .math: 0.46]
+        case .problemSolving:
+            [.speed: 0.48, .memory: 0.60, .attention: 0.55, .flexibility: 0.58, .problemSolving: 0.90, .math: 0.62]
+        case .math:
+            [.speed: 0.55, .memory: 0.52, .attention: 0.50, .flexibility: 0.45, .problemSolving: 0.60, .math: 0.91]
+        }
+    }
 }
 
 // MARK: - View model
@@ -159,6 +196,8 @@ final class BrainSignalViewModel: ObservableObject {
     }
 
     @Published private(set) var parameters: BrainSignalParameters = .idle
+    @Published private(set) var categoryScores: [GameCategory: Double] =
+        Dictionary(uniqueKeysWithValues: GameCategory.allCases.map { ($0, 0.5) })
     @Published private(set) var connectionState: ConnectionState = .connecting
     let mode: Mode
 
@@ -181,12 +220,16 @@ final class BrainSignalViewModel: ObservableObject {
 
     func start() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) { [weak self] in self?.connectionState = .live }
-        withAnimation(.easeInOut(duration: 0.8)) { parameters = source.currentParameters() }
+        refresh()
         parameterTimer = Timer.publish(every: 1.6, on: .main, in: .common).autoconnect()
-            .sink { [weak self] _ in
-                guard let self else { return }
-                withAnimation(.easeInOut(duration: 0.8)) { self.parameters = self.source.currentParameters() }
-            }
+            .sink { [weak self] _ in self?.refresh() }
+    }
+
+    private func refresh() {
+        withAnimation(.easeInOut(duration: 0.8)) {
+            parameters = source.currentParameters()
+            categoryScores = source.currentCategoryScores()
+        }
     }
 
     func stop() { parameterTimer?.cancel() }

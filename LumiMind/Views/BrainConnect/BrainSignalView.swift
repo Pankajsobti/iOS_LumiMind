@@ -11,6 +11,7 @@ struct BrainSignalView: View {
                 VStack(spacing: DesignSystem.Spacing.lg) {
                     heroSection
                     neuroScoreRing
+                    cognitiveSkillGrid
                     if case .postGame(_, let insight, _) = viewModel.mode {
                         insightCallout(insight)
                     }
@@ -97,6 +98,31 @@ struct BrainSignalView: View {
         return NeuroScoreRing(value: score, gradient: gradient)
     }
 
+    // MARK: Cognitive skill breakdown (new)
+
+    private var cognitiveSkillGrid: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.sm) {
+            Text("Cognitive Skill Breakdown")
+                .font(DesignSystem.headline)
+                .foregroundColor(.white)
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: DesignSystem.Spacing.sm) {
+                ForEach(GameCategory.allCases) { category in
+                    CognitiveScoreCard(
+                        category: category,
+                        score: viewModel.categoryScores[category] ?? 0.5,
+                        isHighlighted: highlightedCategory == category
+                    )
+                }
+            }
+        }
+    }
+
+    private var highlightedCategory: GameCategory? {
+        if case .postGame(let game, _, _) = viewModel.mode { return game.category }
+        return nil
+    }
+
     private func insightCallout(_ insight: PostGameBrainSignalSource.SessionInsight) -> some View {
         HStack(spacing: DesignSystem.Spacing.sm) {
             Image(systemName: "sparkles").foregroundColor(.white)
@@ -166,6 +192,63 @@ private struct NeuroScoreRing: View {
             }
         }
         .frame(width: 140, height: 140)
+    }
+}
+
+private struct CognitiveScoreCard: View {
+    let category: GameCategory
+    let score: Double
+    let isHighlighted: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+            HStack {
+                Image(systemName: category.glyphName)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(category.gradient)
+                Spacer()
+                if isHighlighted {
+                    Image(systemName: "star.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.8))
+                }
+            }
+            Text(category.rawValue)
+                .font(DesignSystem.caption)
+                .foregroundColor(.white.opacity(0.7))
+            Text("\(Int(score * 100))%")
+                .font(DesignSystem.title2)
+                .foregroundColor(.white)
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.white.opacity(0.15))
+                    Capsule().fill(category.gradient).frame(width: geo.size.width * score)
+                }
+            }
+            .frame(height: 5)
+        }
+        .padding(DesignSystem.Spacing.md)
+        .background(isHighlighted ? Color.white.opacity(0.1) : Color.white.opacity(0.05))
+        .overlay(
+            RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact)
+                .stroke(isHighlighted ? Color.white.opacity(0.3) : .clear, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact))
+    }
+}
+
+private extension GameCategory {
+    /// Local to this feature only — GameCatalog's icons are per-game,
+    /// not per-category, so this doesn't touch DesignSystem or GameCatalog.
+    var glyphName: String {
+        switch self {
+        case .speed: return "speedometer"
+        case .memory: return "brain.head.profile"
+        case .attention: return "eye"
+        case .flexibility: return "arrow.triangle.2.circlepath"
+        case .problemSolving: return "puzzlepiece.fill"
+        case .math: return "plusminus.circle.fill"
+        }
     }
 }
 

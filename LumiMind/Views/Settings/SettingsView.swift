@@ -21,6 +21,7 @@ struct SettingsView: View {
     @AppStorage("settings.backgroundMusicEnabled") private var backgroundMusicEnabled = true
     @AppStorage("settings.soundEffectsEnabled") private var soundEffectsEnabled = true
     @AppStorage("settings.screenBackground") private var screenBackground = "system"
+    @AppStorage("settings.brainConnectEnabled") private var brainConnectEnabled = false
 
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -38,6 +39,7 @@ struct SettingsView: View {
                         myInformationSection
                         notificationsSection
                         gameSettingsSection
+                        brainConnectionSection   // ← new
                         supportSection
                         accountSection
                     }
@@ -261,6 +263,37 @@ struct SettingsView: View {
             .background(Color.white)
             .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact))
     }
+
+    // MARK: Brain Connection
+
+private var brainConnectionSection: some View {
+    VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
+        Text("Brain Connection")
+            .font(DesignSystem.headline)
+            .foregroundColor(DesignSystem.backgroundOnboarding)
+
+        settingsCard {
+            Toggle("Connect LumiMind to Your Brain", isOn: $brainConnectEnabled.animation())
+                .tint(DesignSystem.backgroundOnboarding)
+
+            if brainConnectEnabled {
+                Divider()
+                NavigationLink {
+                    BrainSignalView()
+                } label: {
+                    Text("View Live Brain Activity")
+                        .font(DesignSystem.buttonLabel)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, DesignSystem.Spacing.sm + DesignSystem.Spacing.xxs)
+                }
+                .background(DesignSystem.primaryGradient)
+                .clipShape(Capsule())
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+}
 }
 
 #Preview {

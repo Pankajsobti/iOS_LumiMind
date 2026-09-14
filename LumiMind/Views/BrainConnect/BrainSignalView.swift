@@ -1,25 +1,24 @@
 import SwiftUI
 
 struct BrainSignalView: View {
-    @StateObject private var viewModel: BrainSignalViewModel
+    @StateObject private var viewModel = BrainSignalViewModel()
     @Environment(\.dismiss) private var dismiss
-
-    init(activeGameName: String? = nil) {
-        _viewModel = StateObject(wrappedValue: BrainSignalViewModel(activeGameName: activeGameName))
-    }
 
     var body: some View {
         ZStack {
             DesignSystem.backgroundOnboarding.ignoresSafeArea()
-
             ScrollView {
                 VStack(spacing: DesignSystem.Spacing.lg) {
-                    header
-                    if let gameName = viewModel.activeGameName {
-                        gameplayBanner(gameName)
+                    heroSection
+                    neuroScoreRing
+                    if case .postGame(_, let insight, _) = viewModel.mode {
+                        insightCallout(insight)
                     }
                     waveformStack
                     parameterGrid
+                    if case .postGame(let game, _, _) = viewModel.mode {
+                        explainerCard(game)
+                    }
                     disclaimer
                 }
                 .padding(.horizontal, DesignSystem.Spacing.lg)
@@ -29,39 +28,84 @@ struct BrainSignalView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button("Done") { dismiss() }
-                    .foregroundColor(.white)
+                Button("Done") { dismiss() }.foregroundColor(.white)
             }
         }
         .onAppear { viewModel.start() }
         .onDisappear { viewModel.stop() }
     }
 
-    private var header: some View {
-        VStack(spacing: DesignSystem.Spacing.xxs) {
-            HStack(spacing: DesignSystem.Spacing.xs) {
-                Circle()
-                    .fill(viewModel.connectionState == .live ? Color.green : Color.yellow)
-                    .frame(width: 8, height: 8)
-                Text(viewModel.connectionState == .live ? "Live Signal" : "Connecting…")
+    // MARK: Hero
+
+    @ViewBuilder
+    private var heroSection: some View {
+        switch viewModel.mode {
+        case .idle:
+            VStack(spacing: DesignSystem.Spacing.sm) {
+                statusBadge
+                Text("Brain Activity").font(DesignSystem.title).foregroundColor(.white)
+                Text("Play a game, then come back here to see your session report.")
                     .font(DesignSystem.subheadline)
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(.white.opacity(0.5))
+                    .multilineTextAlignment(.center)
             }
-            Text("Brain Activity")
-                .font(DesignSystem.title)
-                .foregroundColor(.white)
+        case .postGame(let game, _, let timestamp):
+            VStack(spacing: DesignSystem.Spacing.sm) {
+                HStack(spacing: DesignSystem.Spacing.xxs) {
+                    Image(systemName: game.iconName).foregroundColor(.white).font(.system(size: 12))
+                    Text(game.category.rawValue).font(DesignSystem.caption).foregroundColor(.white)
+                }
+                .padding(.horizontal, DesignSystem.Spacing.sm)
+                .padding(.vertical, DesignSystem.Spacing.xxs)
+                .background(game.category.gradient)
+                .clipShape(Capsule())
+
+                Text("Your Brain During \(game.name)")
+                    .font(DesignSystem.title)
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+
+                Text(relativeString(timestamp))
+                    .font(DesignSystem.caption)
+                    .foregroundColor(.white.opacity(0.4))
+            }
         }
-        .frame(maxWidth: .infinity)
     }
 
-    private func gameplayBanner(_ gameName: String) -> some View {
-        Text("Simulating during: \(gameName)")
-            .font(DesignSystem.caption)
-            .foregroundColor(.white)
-            .padding(.horizontal, DesignSystem.Spacing.md)
-            .padding(.vertical, DesignSystem.Spacing.xs)
-            .background(DesignSystem.primaryGradient)
-            .clipShape(Capsule())
+    private var statusBadge: some View {
+        HStack(spacing: DesignSystem.Spacing.xs) {
+            Circle().fill(viewModel.connectionState == .live ? Color.green : Color.yellow).frame(width: 8, height: 8)
+            Text(viewModel.connectionState == .live ? "Live Signal" : "Connecting…")
+                .font(DesignSystem.subheadline).foregroundColor(.white.opacity(0.8))
+        }
+    }
+
+    private func relativeString(_ date: Date) -> String {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .short
+        return "Captured " + f.localizedString(for: date, relativeTo: Date())
+    }
+
+    // MARK: Neuro score ring
+
+    private var neuroScoreRing: some View {
+        let gradient: LinearGradient = {
+            if case .postGame(let game, _, _) = viewModel.mode { return game.category.gradient }
+            return DesignSystem.primaryGradient
+        }()
+        let score = viewModel.parameters.focus * 0.5 + viewModel.parameters.calm * 0.3 + viewModel.parameters.signalQuality * 0.2
+        return NeuroScoreRing(value: score, gradient: gradient)
+    }
+
+    private func insightCallout(_ insight: PostGameBrainSignalSource.SessionInsight) -> some View {
+        HStack(spacing: DesignSystem.Spacing.sm) {
+            Image(systemName: "sparkles").foregroundColor(.white)
+            Text(insight.changeDescription).font(DesignSystem.subheadline).foregroundColor(.white)
+            Spacer()
+        }
+        .padding(DesignSystem.Spacing.md)
+        .background(DesignSystem.primaryGradient)
+        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadiusCompact))
     }
 
     private var waveformStack: some View {
@@ -84,12 +128,44 @@ struct BrainSignalView: View {
         }
     }
 
+    private func explainerCard(_ game: GameCatalog.Game) -> some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
+            Text("Why This Happens").font(DesignSystem.headline).foregroundColor(.white)
+            Text(game.scienceExplainer).font(DesignSystem.subheadline).foregroundColor(.white.opacity(0.7))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(DesignSystem.Spacing.md)
+        .background(Color.white.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.Radius.cardRadius))
+    }
+
     private var disclaimer: some View {
         Text("Hardware pairing is still in progress — this is a preview using simulated signal data.")
             .font(DesignSystem.caption)
             .foregroundColor(.white.opacity(0.4))
             .multilineTextAlignment(.center)
             .padding(.bottom, DesignSystem.Spacing.md)
+    }
+}
+
+private struct NeuroScoreRing: View {
+    let value: Double
+    let gradient: LinearGradient
+
+    var body: some View {
+        ZStack {
+            Circle().stroke(Color.white.opacity(0.12), lineWidth: 10)
+            Circle()
+                .trim(from: 0, to: value)
+                .stroke(gradient, style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .animation(.easeOut(duration: 1.0), value: value)
+            VStack(spacing: 2) {
+                Text("\(Int(value * 100))").font(DesignSystem.largeTitle).foregroundColor(.white)
+                Text("Neuro Score").font(DesignSystem.caption).foregroundColor(.white.opacity(0.6))
+            }
+        }
+        .frame(width: 140, height: 140)
     }
 }
 
@@ -100,49 +176,33 @@ private struct BrainWaveRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxs) {
             HStack {
-                Text(band.rawValue)
-                    .font(DesignSystem.subheadline)
-                    .foregroundColor(.white.opacity(0.85))
-                Text(band.frequencyLabel)
-                    .font(DesignSystem.caption)
-                    .foregroundColor(.white.opacity(0.4))
+                Text(band.rawValue).font(DesignSystem.subheadline).foregroundColor(.white.opacity(0.85))
+                Text(band.frequencyLabel).font(DesignSystem.caption).foregroundColor(.white.opacity(0.4))
                 Spacer()
             }
             TimelineView(.animation) { context in
-                Canvas { canvasContext, size in
+                Canvas { ctx, size in
                     let path = wavePath(in: size, referenceDate: context.date)
-                    canvasContext.stroke(
-                        path,
-                        with: .linearGradient(
-                            Gradient(colors: band.strokeColors),
-                            startPoint: .zero,
-                            endPoint: CGPoint(x: size.width, y: 0)
-                        ),
-                        lineWidth: 2
-                    )
+                    ctx.stroke(path, with: .linearGradient(Gradient(colors: band.strokeColors), startPoint: .zero, endPoint: CGPoint(x: size.width, y: 0)), lineWidth: 2)
                 }
             }
             .frame(height: 44)
         }
     }
 
-    /// x maps to elapsed time, so the trace looks like it's continuously
-    /// scrolling left even though nothing is actually being buffered.
     private func wavePath(in size: CGSize, referenceDate: Date) -> Path {
         var path = Path()
         let now = referenceDate.timeIntervalSinceReferenceDate
         let pixelsPerSecond: Double = 40
         let step: CGFloat = 2
         let midY = size.height / 2
-
         var x: CGFloat = 0
         var first = true
         while x <= size.width {
-            let timeAtX = now - Double(size.width - x) / pixelsPerSecond
-            let amplitude = viewModel.amplitudes(at: timeAtX)[band] ?? 0
-            let y = midY - CGFloat(amplitude) * (size.height / 2 - 4)
-            if first { path.move(to: CGPoint(x: x, y: y)); first = false }
-            else { path.addLine(to: CGPoint(x: x, y: y)) }
+            let t = now - Double(size.width - x) / pixelsPerSecond
+            let amp = viewModel.amplitudes(at: t)[band] ?? 0
+            let y = midY - CGFloat(amp) * (size.height / 2 - 4)
+            if first { path.move(to: CGPoint(x: x, y: y)); first = false } else { path.addLine(to: CGPoint(x: x, y: y)) }
             x += step
         }
         return path
@@ -155,18 +215,12 @@ private struct ParameterCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.xs) {
-            Text(title)
-                .font(DesignSystem.caption)
-                .foregroundColor(.white.opacity(0.6))
-            Text("\(Int(value * 100))%")
-                .font(DesignSystem.title2)
-                .foregroundColor(.white)
+            Text(title).font(DesignSystem.caption).foregroundColor(.white.opacity(0.6))
+            Text("\(Int(value * 100))%").font(DesignSystem.title2).foregroundColor(.white)
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.white.opacity(0.15))
-                    Capsule()
-                        .fill(DesignSystem.primaryGradient)
-                        .frame(width: geo.size.width * value)
+                    Capsule().fill(DesignSystem.primaryGradient).frame(width: geo.size.width * value)
                 }
             }
             .frame(height: 6)

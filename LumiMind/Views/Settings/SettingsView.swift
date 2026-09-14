@@ -22,6 +22,7 @@ struct SettingsView: View {
     @AppStorage("settings.soundEffectsEnabled") private var soundEffectsEnabled = true
     @AppStorage("settings.screenBackground") private var screenBackground = "system"
     @AppStorage("settings.brainConnectEnabled") private var brainConnectEnabled = false
+    @State private var showPairingSheet = false    
 
     private static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -181,6 +182,12 @@ struct SettingsView: View {
         .buttonStyle(.plain)
     }
 
+
+       
+
+    // MARK: Support / legal        ← this is where you're inserting BEFORE
+
+
     // MARK: Support / legal
 
     private var supportSection: some View {
@@ -273,8 +280,14 @@ private var brainConnectionSection: some View {
             .foregroundColor(DesignSystem.backgroundOnboarding)
 
         settingsCard {
-            Toggle("Connect LumiMind to Your Brain", isOn: $brainConnectEnabled.animation())
-                .tint(DesignSystem.backgroundOnboarding)
+            Toggle("Connect LumiMind to Your Brain", isOn: Binding(
+                get: { brainConnectEnabled },
+                set: { newValue in
+                    if newValue { showPairingSheet = true }
+                    else { withAnimation { brainConnectEnabled = false } }
+                }
+            ))
+            .tint(DesignSystem.backgroundOnboarding)
 
             if brainConnectEnabled {
                 Divider()
@@ -291,6 +304,12 @@ private var brainConnectionSection: some View {
                 .clipShape(Capsule())
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
+        }
+    }
+    .fullScreenCover(isPresented: $showPairingSheet) {
+        BrainPairingView {
+            showPairingSheet = false
+            withAnimation { brainConnectEnabled = true }
         }
     }
 }

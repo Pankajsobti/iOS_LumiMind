@@ -55,6 +55,9 @@ struct ScienceExplainerView: View {
         }
         .navigationBarBackButtonHidden(true)
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            BrainSessionRecorder.record(gameId: game.id)
+        }
     }
 
     // MARK: Hero header

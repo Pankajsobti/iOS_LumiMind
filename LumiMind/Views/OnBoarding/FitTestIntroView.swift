@@ -10,6 +10,10 @@ struct FitTestIntroView: View {
     /// Launches MemoryMatrixView. The caller owns navigation/presentation.
     var onStart: () -> Void
 
+    /// Skips the Fit Test (and the rest of onboarding) entirely,
+    /// dropping the user straight into the main app.
+    var onSkip: () -> Void
+
     private let steps: [(title: String, subtitle: String)] = [
         ("Play 3 quick games", "We'll measure where you're starting from."),
         ("See how you compare", "Against others with similar goals."),
@@ -75,7 +79,20 @@ struct FitTestIntroView: View {
                 .buttonStyle(.plain)
                 .background(DesignSystem.primaryGradient)
                 .clipShape(Capsule())
+                .shadow(color: DesignSystem.backgroundMain.opacity(0.35), radius: 14, x: 0, y: 8)
                 .padding(.horizontal, DesignSystem.Spacing.lg)
+
+                Button(action: onSkip) {
+                    HStack(spacing: DesignSystem.Spacing.xxs) {
+                        Text("Skip for now")
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .font(DesignSystem.body)
+                    .foregroundColor(DesignSystem.backgroundMain.opacity(0.65))
+                    .padding(.vertical, DesignSystem.Spacing.sm)
+                }
+                .buttonStyle(.plain)
                 .padding(.bottom, DesignSystem.Spacing.lg)
             }
         }
@@ -85,7 +102,8 @@ struct FitTestIntroView: View {
 // MARK: - Preview
 
 #Preview {
-    FitTestIntroView(onStart: {
-        print("Start tapped — launch MemoryMatrixView")
-    })
+    FitTestIntroView(
+        onStart: { print("Start tapped — launch MemoryMatrixView") },
+        onSkip: { print("Skip tapped — go straight to main") }
+    )
 }

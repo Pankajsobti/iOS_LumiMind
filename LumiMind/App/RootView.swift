@@ -73,9 +73,10 @@ struct RootView: View {
                     onCancel: { destination = .welcome }
                 )
             case .fitTestIntro:
-                FitTestIntroView(onStart: {
-                    destination = .memoryMatrixFitTest
-                })
+                FitTestIntroView(
+                    onStart: { destination = .memoryMatrixFitTest },
+                    onSkip: { destination = .main }
+                )
             case .memoryMatrixFitTest:
                 MemoryMatrixView(
                     gameResultViewModel: fitTestResultViewModel,
